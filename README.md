@@ -1,7 +1,7 @@
 # 🎮 NovaChess
 
 <div align="center">
-  <img src="static/images/match/pieces/white-king.png" alt="NovaChess Logo" width="100" height="100"/>
+  <img src="https://pic1.imgdb.cn/item/67fbede088c538a9b5ceb4a3.png" alt="NovaChess Logo" width=30% />
   <br>
   <p>一个现代化的国际象棋应用，提供多平台支持</p>
   
