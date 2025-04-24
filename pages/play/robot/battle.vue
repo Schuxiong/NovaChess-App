@@ -178,6 +178,7 @@ import {
   isKingInCheck,
   recordMove
 } from '@/utils/chess/cheesLogic.js';
+import { ChessAI } from '@/utils/chess/chessAI.js';
 
 export default {
   components: {
@@ -238,7 +239,15 @@ export default {
         "这是个陷阱吗？"
       ],
       currentRobotMessage: '',
-      messageTimeout: null
+      messageTimeout: null,
+      
+      // 机器人难度映射
+      robotDifficulties: {
+        'neighbor': 'beginner',      // 邻居大叔
+        'teacher': 'intermediate',   // 象棋老师
+        'competitor': 'advanced',    // 竞赛选手
+        'grandmaster': 'master'      // 特级大师
+      }
     };
   },
   onLoad(options) {
@@ -452,88 +461,32 @@ export default {
       this.validMoves = [];
     },
     
-    // 机器人走棋（简化版，可以根据难度级别调整）
+    // 机器人走棋（使用 Minimax 算法）
     robotMove() {
       // 显示思考中消息
       this.showRobotMessage("让我思考一下...");
       
+      const difficulty = this.getDifficultyLevel();
+      const thinkTime = ChessAI.difficultyLevels[difficulty].thinkTime;
+      
       setTimeout(() => {
-        // 获取所有机器人的棋子
-        const robotPieces = [];
-        for (let row = 0; row < 8; row++) {
-          for (let col = 0; col < 8; col++) {
-            const piece = this.boardState[row][col];
-            if (piece && getPieceColor(piece) === this.currentPlayer) {
-              robotPieces.push({ row, col });
-            }
-          }
-        }
+        // 使用 Minimax 算法找到最佳移动
+        const bestMove = ChessAI.findBestMove(this.boardState, this.currentPlayer, difficulty);
         
-        // 为每个棋子计算可能的移动
-        let allMoves = [];
-        robotPieces.forEach(piece => {
-          const moves = getValidMoves(this.boardState, piece.row, piece.col);
-          moves.forEach(move => {
-            allMoves.push({
-              from: piece,
-              to: move,
-              score: this.evaluateMove(piece, move)
-            });
-          });
-        });
-        
-        // 根据分数排序移动
-        allMoves.sort((a, b) => b.score - a.score);
-        
-        if (allMoves.length > 0) {
-          // 选择得分最高的移动（添加一些随机性，不总是选最佳）
-          const topMoves = allMoves.slice(0, Math.min(3, allMoves.length));
-          const selectedMoveIndex = Math.floor(Math.random() * topMoves.length);
-          const selectedMove = topMoves[selectedMoveIndex];
-          
+        if (bestMove) {
           // 执行移动
-          this.makeMove(selectedMove.from, selectedMove.to);
+          this.makeMove(bestMove.from, bestMove.to);
         } else {
           // 没有可行的移动，游戏结束
           this.handleCheckmate(); // 或者和棋
         }
-      }, 1000); // 思考时间
+      }, thinkTime); // 根据难度设置思考时间
     },
     
-    // 评估移动的得分（简单版本，可根据需要扩展）
-    evaluateMove(from, to) {
-      let score = 0;
-      const piece = this.boardState[from.row][from.col];
-      const targetPiece = this.boardState[to.row][to.col];
-      
-      // 基本策略：吃子比不吃子好
-      if (targetPiece) {
-        // 根据被吃棋子的价值评分
-        score += this.getPieceValue(targetPiece);
-      }
-      
-      // 中心控制
-      const centerDistance = Math.abs(to.row - 3.5) + Math.abs(to.col - 3.5);
-      score += (4 - centerDistance) * 0.1; // 越靠近中心分数越高
-      
-      // 随机因素，增加游戏变化性
-      score += Math.random() * 0.5;
-      
-      return score;
-    },
-    
-    // 获取棋子价值
-    getPieceValue(piece) {
-      const type = getPieceType(piece);
-      switch (type) {
-        case 'pawn': return 1;
-        case 'knight': return 3;
-        case 'bishop': return 3;
-        case 'rook': return 5;
-        case 'queen': return 9;
-        case 'king': return 100; // 极高值确保优先保护王
-        default: return 0;
-      }
+    // 获取当前机器人的难度级别
+    getDifficultyLevel() {
+      // 根据 robotId 获取难度级别
+      return this.robotDifficulties[this.robotId] || 'intermediate';
     },
     
     // 检查游戏结局
@@ -660,6 +613,14 @@ export default {
     
     // 寻找玩家最佳移动
     findBestPlayerMove() {
+      // 使用 ChessAI 找到当前玩家的最佳移动
+      const bestMove = ChessAI.findBestMove(this.boardState, this.currentPlayer, 'intermediate');
+      
+      if (bestMove) {
+        return bestMove;
+      }
+      
+      // 如果 AI 没有找到最佳移动，回退到简单的评估方法
       // 获取所有玩家的棋子
       const playerPieces = [];
       for (let row = 0; row < 8; row++) {
@@ -688,6 +649,34 @@ export default {
       allMoves.sort((a, b) => b.score - a.score);
       
       return allMoves.length > 0 ? allMoves[0] : null;
+    },
+    
+    // 简单的移动评估函数（作为备用）
+    evaluateMove(from, to) {
+      let score = 0;
+      
+      // 检查目标位置是否有棋子（吃子）
+      const targetPiece = this.boardState[to.row][to.col];
+      if (targetPiece) {
+        // 根据被吃棋子类型加分
+        const pieceType = getPieceType(targetPiece);
+        switch (pieceType) {
+          case 'pawn': score += 10; break;
+          case 'knight': score += 30; break;
+          case 'bishop': score += 30; break;
+          case 'rook': score += 50; break;
+          case 'queen': score += 90; break;
+        }
+      }
+      
+      // 靠近中心的移动优先
+      const centerDistance = Math.abs(to.row - 3.5) + Math.abs(to.col - 3.5);
+      score += (4 - centerDistance) * 0.1;
+      
+      // 添加一点随机性
+      score += Math.random() * 0.2;
+      
+      return score;
     },
     
     // 处理升变
