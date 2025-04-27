@@ -105,13 +105,6 @@
       }
     },
     {
-      "path": "pages/play/robot/battle",
-      "style": {
-        "navigationBarTitleText": "智能教练对战",
-        "navigationStyle": "custom"
-      }
-    },
-    {
       "path": "pages/work/learn/rules",
       "style": {
         "navigationBarTitleText": "规则入门",

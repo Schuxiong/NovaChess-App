@@ -62,7 +62,8 @@
           <view class="robot-details">
             <!-- 气泡框自我介绍 -->
             <view class="speech-bubble">
-              <text>这是一些机器人风格自我介绍</text>
+              <text v-if="isAiRobot">我是基于DeepSeek大语言模型的智能象棋教练。我可以分析棋局，提供思考过程，并给出下一步最佳走法。</text>
+              <text v-else>这是一位普通机器人棋手，它会基于预设的策略进行下棋。难度适中，适合休闲对弈。</text>
             </view>
             
             <!-- 底部信息区域 -->
@@ -71,6 +72,8 @@
               <text class="robot-name">{{ robotName }}</text>
               <!-- 积分 -->
               <text class="robot-rating">{{ robotRating }}</text>
+              <!-- AI标志 -->
+              <view v-if="isAiRobot" class="ai-badge">AI</view>
               <!-- 国旗 -->
               <image v-if="robotFlag" class="robot-flag" :src="robotFlag" mode="aspectFit"></image>
             </view>
@@ -139,6 +142,14 @@
           <image class="robot-chat-avatar" :src="robotAvatar" mode="aspectFill"></image>
           <view class="speech-bubble">
             <text>{{ currentRobotMessage }}</text>
+          </view>
+        </view>
+        
+        <!-- AI思考过程显示 -->
+        <view class="ai-thoughts-container" v-if="isAiRobot && aiThoughts">
+          <view class="ai-thoughts-title">思考过程</view>
+          <view class="ai-thoughts">
+            <text>{{ aiThoughts }}</text>
           </view>
         </view>
         
@@ -321,6 +332,7 @@ import {
   recordMove,
   resetChessBoardState
 } from '@/utils/chess/cheesLogic.js';
+import { getNextMove } from './utils/deepseekService.js';
 
 export default {
   components: {
@@ -364,11 +376,11 @@ export default {
         { id: 'officer', name: 'Eva', avatar: 'https://pic1.imgdb.cn/item/67f3c549e381c3632bee8fba.png', rating: 1600, locked: true }
       ],
       expertRobots: [
-        { id: 'master', name: '象棋大师', avatar: 'https://pic1.imgdb.cn/item/67f3c549e381c3632bee8fba.png', rating: 1800, locked: true },
-        { id: 'professor', name: '象棋教授', avatar: 'https://pic1.imgdb.cn/item/67f3c549e381c3632bee8fb9.png', rating: 1900, locked: true },
-        { id: 'champion', name: '地区冠军', avatar: 'https://pic1.imgdb.cn/item/67f3c4fae381c3632bee8f9c.png', rating: 2000, locked: true },
-        { id: 'grandmaster', name: '特级大师', avatar: 'https://pic1.imgdb.cn/item/67f3c4fae381c3632bee8f9f.png', rating: 2200, locked: true },
-        { id: 'legend', name: '传奇棋手', avatar: 'https://pic1.imgdb.cn/item/67f3c4fae381c3632bee8fa0.png', rating: 2500, locked: true }
+        { id: 'master', name: '象棋大师', avatar: 'https://pic1.imgdb.cn/item/67f3c549e381c3632bee8fba.png', rating: 1800, locked: false },
+        { id: 'professor', name: '象棋教授', avatar: 'https://pic1.imgdb.cn/item/67f3c549e381c3632bee8fb9.png', rating: 1900, locked: false },
+        { id: 'champion', name: '地区冠军', avatar: 'https://pic1.imgdb.cn/item/67f3c4fae381c3632bee8f9c.png', rating: 2000, locked: false },
+        { id: 'grandmaster', name: '特级大师', avatar: 'https://pic1.imgdb.cn/item/67f3c4fae381c3632bee8f9f.png', rating: 2200, locked: false },
+        { id: 'legend', name: '传奇棋手', avatar: 'https://pic1.imgdb.cn/item/67f3c4fae381c3632bee8fa0.png', rating: 2500, locked: false }
       ],
       
       // 界面状态
@@ -417,7 +429,12 @@ export default {
       },
       
       // 升变选项
-      promotionOptions: ['queen', 'rook', 'bishop', 'knight'] // 可选的升变棋子
+      promotionOptions: ['queen', 'rook', 'bishop', 'knight'], // 可选的升变棋子
+      
+      // 新增AI相关属性
+      isAiRobot: false, // 是否是AI驱动的机器人（比赛常客）
+      aiThinking: false, // AI是否正在思考
+      aiThoughts: '', // AI的思考过程
     };
   },
   onLoad() {
@@ -610,52 +627,115 @@ export default {
       this.validMoves = [];
     },
     
-    // 机器人走棋（简化版，可以根据难度级别调整）
-    robotMove() {
+    // 机器人走棋
+    async robotMove() {
       // 显示思考中消息
       this.showRobotMessage("让我思考一下...");
+      this.aiThinking = true;
       
-      setTimeout(() => {
-        // 获取所有机器人的棋子
-        const robotPieces = [];
-        for (let row = 0; row < 8; row++) {
-          for (let col = 0; col < 8; col++) {
-            const piece = this.boardState[row][col];
-            if (piece && getPieceColor(piece) === this.currentPlayer) {
-              robotPieces.push({ row, col });
-            }
+      try {
+        // 区分普通机器人和AI驱动的专家机器人
+        if (this.isAiRobot) {
+          // 使用DeepSeek API获取下一步棋
+          this.aiThoughts = '';
+          
+          // 显示思考动画
+          const thinkingInterval = setInterval(() => {
+            this.showRobotMessage("思考中" + ".".repeat(Math.floor(Date.now() / 500) % 4 + 1));
+          }, 500);
+          
+          try {
+            const moveResult = await getNextMove(
+              this.selectedRobotId, 
+              this.boardState, 
+              this.moveHistory,
+              this.playerColor
+            );
+            
+            // 清除思考动画
+            clearInterval(thinkingInterval);
+            
+            // 显示AI的思考
+            this.aiThoughts = moveResult.thoughts;
+            
+            // 显示AI发送的消息
+            this.showRobotMessage(moveResult.message);
+            
+            // 执行AI决定的移动
+            setTimeout(() => {
+              // 检查是否包含升变信息
+              const moveInfo = moveResult.promotion ? { promoteTo: moveResult.promotion } : {};
+              this.makeMove(moveResult.from, moveResult.to, moveInfo);
+              this.aiThinking = false;
+            }, 1000);
+          } catch (error) {
+            // 清除思考动画
+            clearInterval(thinkingInterval);
+            
+            console.error('AI走棋出错:', error);
+            this.showRobotMessage("我有点迷糊了，让我用备用策略...");
+            
+            // 出错时回退到普通机器人逻辑
+            setTimeout(() => {
+              this.makeSimpleRobotMove();
+              this.aiThinking = false;
+            }, 1000);
+          }
+        } else {
+          // 普通机器人走棋逻辑
+          setTimeout(() => {
+            this.makeSimpleRobotMove();
+            this.aiThinking = false;
+          }, 1000);
+        }
+      } catch (error) {
+        console.error('机器人走棋出错:', error);
+        this.aiThinking = false;
+        this.showRobotMessage("抱歉，我遇到了问题");
+      }
+    },
+    
+    // 简单机器人走棋逻辑（原来的robotMove逻辑）
+    makeSimpleRobotMove() {
+      // 获取所有机器人的棋子
+      const robotPieces = [];
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const piece = this.boardState[row][col];
+          if (piece && getPieceColor(piece) === this.currentPlayer) {
+            robotPieces.push({ row, col });
           }
         }
-        
-        // 为每个棋子计算可能的移动
-        let allMoves = [];
-        robotPieces.forEach(piece => {
-          const moves = getValidMoves(this.boardState, piece.row, piece.col);
-          moves.forEach(move => {
-            allMoves.push({
-              from: piece,
-              to: move,
-              score: this.evaluateMove(piece, move)
-            });
+      }
+      
+      // 为每个棋子计算可能的移动
+      let allMoves = [];
+      robotPieces.forEach(piece => {
+        const moves = getValidMoves(this.boardState, piece.row, piece.col);
+        moves.forEach(move => {
+          allMoves.push({
+            from: piece,
+            to: move,
+            score: this.evaluateMove(piece, move)
           });
         });
+      });
+      
+      // 根据分数排序移动
+      allMoves.sort((a, b) => b.score - a.score);
+      
+      if (allMoves.length > 0) {
+        // 选择得分最高的移动（添加一些随机性，不总是选最佳）
+        const topMoves = allMoves.slice(0, Math.min(3, allMoves.length));
+        const selectedMoveIndex = Math.floor(Math.random() * topMoves.length);
+        const selectedMove = topMoves[selectedMoveIndex];
         
-        // 根据分数排序移动
-        allMoves.sort((a, b) => b.score - a.score);
-        
-        if (allMoves.length > 0) {
-          // 选择得分最高的移动（添加一些随机性，不总是选最佳）
-          const topMoves = allMoves.slice(0, Math.min(3, allMoves.length));
-          const selectedMoveIndex = Math.floor(Math.random() * topMoves.length);
-          const selectedMove = topMoves[selectedMoveIndex];
-          
-          // 执行移动
-          this.makeMove(selectedMove.from, selectedMove.to);
-        } else {
-          // 没有可行的移动，游戏结束
-          this.handleCheckmate(); // 或者和棋
-        }
-      }, 1000); // 思考时间
+        // 执行移动
+        this.makeMove(selectedMove.from, selectedMove.to);
+      } else {
+        // 没有可行的移动，游戏结束
+        this.handleCheckmate(); // 或者和棋
+      }
     },
     
     // 评估移动的得分（简单版本，可根据需要扩展）
@@ -1171,32 +1251,30 @@ export default {
     
     // 选择机器人
     selectRobot(robotId) {
-      // 检查机器人是否锁定
-      const casualRobot = this.casualRobots.find(robot => robot.id === robotId);
-      const expertRobot = this.expertRobots.find(robot => robot.id === robotId);
-      const robot = casualRobot || expertRobot;
-      
-      if (robot && robot.locked) {
-        uni.showToast({
-          title: '该机器人尚未解锁',
-          icon: 'none'
-        });
-        return;
-      }
-      
       this.selectedRobotId = robotId;
       
-      // 更新选中的机器人信息
-      if (robot) {
-        this.robotName = robot.name;
-        this.robotAvatar = robot.avatar;
-        this.robotRating = robot.rating;
+      // 根据ID判断是否是专家机器人（AI驱动）
+      const casualRobot = this.casualRobots.find(robot => robot.id === robotId);
+      const expertRobot = this.expertRobots.find(robot => robot.id === robotId);
+      
+      // 更新机器人信息
+      if (casualRobot) {
+        this.robotName = casualRobot.name;
+        this.robotAvatar = casualRobot.avatar;
+        this.robotRating = casualRobot.rating;
+        this.robotFlag = '';
+        this.isAiRobot = false;
+      } else if (expertRobot) {
+        this.robotName = expertRobot.name;
+        this.robotAvatar = expertRobot.avatar;
+        this.robotRating = expertRobot.rating;
+        this.robotFlag = '';
+        this.isAiRobot = true;
       }
     },
     
     // 开始游戏
     startGame() {
-      // 找到选中的机器人信息
       const selectedRobot = [...this.casualRobots, ...this.expertRobots].find(robot => robot.id === this.selectedRobotId);
       
       if (!selectedRobot) {
@@ -1211,6 +1289,13 @@ export default {
       this.robotName = selectedRobot.name;
       this.robotAvatar = selectedRobot.avatar;
       this.robotRating = selectedRobot.rating;
+      
+      // 判断是否是AI机器人（比赛常客）
+      this.isAiRobot = this.expertRobots.some(robot => robot.id === this.selectedRobotId);
+      
+      // 重置AI思考相关状态
+      this.aiThinking = false;
+      this.aiThoughts = '';
       
       // 切换到对战模式
       this.isSelectionMode = false;
@@ -1399,6 +1484,15 @@ export default {
         font-size: 28rpx;
         color: #666666;
         margin-right: 10rpx;
+      }
+      
+      .ai-badge {
+        background-color: #81B64C;
+        border-radius: 10rpx;
+        padding: 4rpx 8rpx;
+        font-size: 24rpx;
+        color: #fff;
+        margin-left: 10rpx;
       }
       
       .robot-flag {
@@ -1823,5 +1917,30 @@ export default {
       }
     }
   }
+}
+
+/* 新增AI思考显示样式 */
+.ai-thoughts-container {
+  margin: 10rpx 0 20rpx 0;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 10rpx;
+  padding: 16rpx;
+}
+
+.ai-thoughts-title {
+  font-size: 24rpx;
+  color: #AAA;
+  margin-bottom: 8rpx;
+}
+
+.ai-thoughts {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 8rpx;
+  padding: 16rpx;
+  font-size: 24rpx;
+  color: #BBB;
+  font-style: italic;
+  max-height: 200rpx;
+  overflow-y: auto;
 }
 </style> 
