@@ -6,13 +6,16 @@
     <!-- 用户信息区 -->
     <view class="user-info-section">
       <view class="user-avatar-name">
-        <image class="user-avatar" src="https://pic1.imgdb.cn/item/67f3c5c7e381c3632bee8ff9.png" mode="aspectFill"></image>
+        <image class="user-avatar" :src="userInfo.avatar" mode="aspectFill"></image>
         <view class="user-name-signature">
           <view class="user-name">
             <text class="user-tag">GM</text>
-            <text class="user-name-text">NikoTheodorou</text>
+            <text class="user-name-text">{{userInfo.realname}}</text>
+            <view class="edit-btn" @click="goToEdit">
+              <image class="edit-icon" src="https://pic1.imgdb.cn/item/68121c1358cb8da5c8d56aa4.png" mode="aspectFit" style="width: 30rpx; height: 30rpx;"></image>
+            </view>
           </view>
-          <text class="user-signature">这个地方是个性签名......</text>
+          <text class="user-signature">{{userInfo.signature}}</text>
         </view>
       </view>
       
@@ -23,7 +26,7 @@
         </view>
         <view class="user-register">
           <text class="register-label">注册时间</text>
-          <text class="register-value">Nov 12, 2023</text>
+          <text class="register-value">{{userInfo.registerDate}}</text>
         </view>
       </view>
     </view>
@@ -173,6 +176,7 @@
 
 <script>
 import TopSpacing from '@/components/TopSpacing.vue'
+import { getUserData } from '@/api/system/user'
 
 export default {
   components: {
@@ -180,15 +184,41 @@ export default {
   },
   data() {
     return {
-      statusBarHeight: 0
+      statusBarHeight: 0,
+      userInfo: {
+        avatar: '',
+        username: '',
+        realname: '',
+        signature: '',
+        registerDate: ''
+      }
     }
   },
   onLoad() {
     // 获取状态栏高度
     const systemInfo = uni.getSystemInfoSync()
     this.statusBarHeight = systemInfo.statusBarHeight
+    
+    // 获取用户信息
+    this.getUserInfo()
   },
   methods: {
+    async getUserInfo() {
+      try {
+        const res = await getUserData()
+        if (res.success) {
+          this.userInfo = {
+            avatar: res.result.avatar || 'https://pic1.imgdb.cn/item/67f3c5c7e381c3632bee8ff9.png',
+            username: res.result.username || 'NikoTheodorou',
+            realname: res.result.realname || 'NikoTheodorou',
+            signature: res.result.signature || '这个地方是个性签名......',
+            registerDate: res.result.createTime || 'Nov 12, 2023'
+          }
+        }
+      } catch (error) {
+        console.error('获取用户信息失败:', error)
+      }
+    },
     handleLogout() {
       uni.showModal({
         title: '提示',
@@ -206,6 +236,11 @@ export default {
             // });
           }
         }
+      });
+    },
+    goToEdit() {
+      uni.navigateTo({
+        url: '/pages/mine/info/edit'
       });
     },
     goToReplay(matchId) {

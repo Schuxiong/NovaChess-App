@@ -19,16 +19,14 @@
       </view>
       
       <view class="message-list">
-        <view class="message-item" @click="openChat('LucTestAccount')">
-          <image class="avatar" src="/static/images/mail/avatar1.png" mode="aspectFill"></image>
+        <view class="message-item" v-for="(item, index) in chatSessions" :key="index" @click="openChat(item)">
+          <image class="avatar" :src="item && item.avatar ? item.avatar : '/static/images/mail/default-avatar.png'" mode="aspectFill"></image>
           <view class="message-content">
-            <view class="message-sender">LucTestAccount</view>
-            <view class="message-brief">OK</view>
+            <view class="message-sender">{{item.username}}</view>
+            <view class="message-brief">{{item.lastMessage}}</view>
           </view>
-          <view class="message-time">Just now</view>
+          <view class="message-time">{{formatTime(item.lastMessageTime)}}</view>
         </view>
-        
-        <!-- 可以添加更多消息项 -->
       </view>
       
       <view class="all-messages">
@@ -50,32 +48,35 @@
         </view>
       </view>
       
-      <view class="chat-messages">
-        <view class="chat-message">
-          <image class="avatar" src="/static/images/mail/avatar2.png" mode="aspectFill"></image>
-          <view class="message-info">
-            <view class="message-sender-time">
-              <text class="sender">lucasshanchuxiong</text>
-              <text class="time">14 minutes ago</text>
-            </view>
-            <view class="message-bubble">
-              <text class="message-text">一条这是测试短信，这是yitiao暂暂</text>
-            </view>
-          </view>
-        </view>
-        
-        <view class="chat-message">
-          <image class="avatar" src="/static/images/mail/avatar1.png" mode="aspectFill"></image>
-          <view class="message-info">
-            <view class="message-sender-time">
-              <text class="sender">{{currentChat}}</text>
-              <text class="time">Just now</text>
-            </view>
-            <view class="message-bubble">
-              <text class="message-text">got it</text>
+      <view class="chat-messages" style="height: 70vh; overflow-y: auto; -webkit-overflow-scrolling: touch;">
+        <view class="chat-message" v-for="(item, index) in chatMessagesSorted" :key="index"
+          :class="{'my-message': item.esSenderName === userInfo.username, 'other-message': item.esSenderName !== userInfo.username}">
+          <view v-if="item.esSenderName !== userInfo.username" class="message-row left">
+            <image class="avatar" :src="item.esSenderAvatar || item.esReceiverAvatar || item.avatar || '/static/images/mail/default-avatar.png'" mode="aspectFill"></image>
+            <view class="message-info">
+              <view class="message-sender-time">
+                <text class="sender">{{item.esSenderName}}</text>
+                <text class="time">{{formatTime(item.esSendTime)}}</text>
+              </view>
+              <view class="message-bubble">
+                <text class="message-text">{{item.esContent}}</text>
+              </view>
             </view>
           </view>
+          <view v-else class="message-row right">
+            <view class="message-info">
+              <view class="message-sender-time">
+                <text class="sender">{{item.esSenderName}}</text>
+                <text class="time">{{formatTime(item.esSendTime)}}</text>
+              </view>
+              <view class="message-bubble">
+                <text class="message-text">{{item.esContent}}</text>
+              </view>
+            </view>
+            <image class="avatar" :src="item.esSenderAvatar || (item && item.avatar) || '/static/images/mail/avatar1.png'" mode="aspectFill"></image>
+          </view>
         </view>
+        <view id="chat-bottom"></view>
       </view>
       
       <view class="message-input-area">
@@ -135,6 +136,9 @@
 </template>
 
 <script>
+import { sendChatMessage, getChatHistory, getMessageList, getChatSessions } from '@/api/mail'
+import { getUserData } from '@/api/system/user'
+
 export default {
   data() {
     return {
@@ -142,10 +146,52 @@ export default {
       currentChat: '',
       messageText: '',
       recipient: '',
-      newMessageText: ''
+      newMessageText: '',
+      messages: [],
+      chatMessages: [],
+      chatSessions: [],
+      userInfo: null, // 存储用户信息
+      // 新增排序后的聊天消息
+      chatMessagesSorted: []
     }
   },
+  created() {
+    this.getUserInfo()
+  },
   methods: {
+    // 获取用户信息
+    async getUserInfo() {
+      try {
+        const res = await getUserData()
+        if (res.success) {
+          console.log('获取用户信息成功:', res.result)
+          // 由于store中没有SET_USERINFO mutation，需要使用现有的mutations
+          // 存储用户名到store中
+          this.$store.commit('SET_NAME', res.result.username || res.result.realname || '')
+          // 存储头像到store中
+          if (res.result.avatar) {
+            this.$store.commit('SET_AVATAR', res.result.avatar)
+          }
+          // 将用户信息保存到本地变量中
+          this.userInfo = res.result
+          // 获取用户信息后再加载聊天会话
+          this.loadChatSessions()
+        } else {
+          console.error('获取用户信息失败:', res)
+          uni.showToast({
+            title: '获取用户信息失败',
+            icon: 'none'
+          })
+        }
+      } catch (error) {
+        console.error('获取用户信息失败:', error)
+        uni.showToast({
+          title: '获取用户信息失败，请重新登录',
+          icon: 'none'
+        })
+      }
+    },
+    
     // 显示新消息页面
     showNewMessage() {
       this.currentPage = 'new';
@@ -154,10 +200,129 @@ export default {
     },
     
     // 打开聊天详情
-    openChat(username) {
+    async openChat(item) {
       this.currentPage = 'chat';
-      this.currentChat = username;
+      this.currentChat = item.username;
       this.messageText = '';
+      // 查找当前会话的用户ID
+      const chatUserId = item && item.userId ? item.userId : null;
+      await this.loadChatMessages(chatUserId);
+    },
+    
+    // 加载聊天会话列表
+    async loadChatSessions() {
+      try {
+        if (!this.userInfo || !this.userInfo.username) {
+          console.error('本地用户信息不存在:', this.userInfo);
+          uni.showToast({
+            title: '用户信息未获取，请重新登录',
+            icon: 'none'
+          });
+          return;
+        }
+        console.log('使用用户ID加载聊天会话:', this.userInfo.id);
+        const res = await getChatSessions({
+          userId: this.userInfo.id || this.userInfo.userId
+        });
+        // 按用户分组，获取每个用户的最新一条消息
+        const groupedMessages = {};
+        (res.result?.records || []).forEach(item => {
+          const otherUser = item.esSenderName === this.userInfo.username ? item.esReceiverName : item.esSenderName;
+          const otherUserId = item.esSenderName === this.userInfo.username ? item.esReceiverId : item.esSenderId;
+          if (!groupedMessages[otherUser] || new Date(item.esSendTime) > new Date(groupedMessages[otherUser].esSendTime)) {
+            groupedMessages[otherUser] = {...item, userId: otherUserId};
+          }
+        });
+        this.chatSessions = Object.values(groupedMessages).map(item => ({
+          username: item.esSenderName === this.userInfo.username ? item.esReceiverName : item.esSenderName,
+          userId: item.esSenderName === this.userInfo.username ? item.esReceiverId : item.esSenderId,
+          lastMessage: item.esContent || '',
+          lastMessageTime: item.esSendTime || new Date().toISOString(),
+          avatar: item.esSenderAvatar || item.esReceiverAvatar || item.avatar || '/static/images/mail/default-avatar.png'
+        }));
+      } catch (error) {
+        console.error('加载聊天会话列表失败', error);
+        uni.showToast({
+          title: '加载会话失败',
+          icon: 'none'
+        });
+      }
+    },
+    
+    // 加载消息列表
+    async loadMessages() {
+      try {
+        const res = await getMessageList({});
+        this.messages = (res.result.records || []).map(item => ({
+          ...item,
+          esSenderName: item.esSenderName || item.createBy || '系统消息',
+          esContent: item.esContent || '无内容',
+          avatar: item.avatar || '/static/images/mail/default-avatar.png',
+          esSendTime: item.esSendTime || new Date().toISOString()
+        }));
+      } catch (error) {
+        console.error('加载消息列表失败', error);
+        if(error.response && error.response.status === 500) {
+          uni.showToast({
+            title: '服务器错误，请稍后再试',
+            icon: 'none'
+          });
+        } else {
+          uni.showToast({
+            title: '加载消息失败，请检查网络',
+            icon: 'none'
+          });
+        }
+      }
+    },
+    
+    // 加载聊天记录
+    async loadChatMessages(receiverId) {
+      try {
+        if (!this.userInfo || !this.userInfo.id) {
+          console.error('加载聊天记录时用户信息不存在');
+          uni.showToast({
+            title: '用户信息未获取，请重新登录',
+            icon: 'none'
+          });
+          return;
+        }
+        console.log('加载与用户的聊天记录:', receiverId);
+        const res = await getChatHistory(
+          this.userInfo.id,
+          receiverId
+        );
+        // 兼容不同返回结构，确保为数组
+        let chatList = [];
+        if (Array.isArray(res.result)) {
+          chatList = res.result;
+        } else if (res.result && Array.isArray(res.result.records)) {
+          chatList = res.result.records;
+        } else {
+          chatList = [];
+        }
+        this.chatMessages = chatList.map(item => {
+          if (!item) {
+            return {
+              esSenderName: '系统消息',
+              esContent: '无内容',
+              avatar: '/static/images/mail/default-avatar.png',
+              esSendTime: new Date().toISOString()
+            };
+          }
+          return {
+            ...item,
+            esSenderName: item.esSenderName || item.createBy || '系统消息',
+            esContent: item.esContent || '无内容',
+            avatar: item.avatar || '/static/images/mail/default-avatar.png',
+            esSendTime: item.esSendTime || new Date().toISOString()
+          };
+        });
+        // 按时间正序排序（最早在上，最新在下）
+        this.chatMessagesSorted = [...this.chatMessages].sort((a, b) => new Date(a.esSendTime) - new Date(b.esSendTime));
+      } catch (error) {
+        console.error('加载聊天记录失败', error);
+      }
     },
     
     // 返回收件箱
@@ -166,7 +331,7 @@ export default {
     },
     
     // 发送消息
-    sendMessage() {
+    async sendMessage() {
       if (!this.messageText.trim()) {
         uni.showToast({
           title: '消息不能为空',
@@ -174,18 +339,38 @@ export default {
         });
         return;
       }
-      
-      // 这里应该有发送消息的逻辑
-      uni.showToast({
-        title: '消息已发送',
-        icon: 'none'
-      });
-      
-      this.messageText = '';
+      console.log('准备发送消息给:', this.currentChat, '内容:', this.messageText);
+      try {
+        const res = await sendChatMessage({
+          esReceiver: this.currentChat,
+          esContent: this.messageText,
+          esSenderName: this.userInfo.username,
+          esReceiverName: this.currentChat,
+          esSenderId: this.userInfo.id || this.userInfo.userId
+        });
+        console.log('消息发送成功:', res);
+        uni.showToast({
+          title: '消息已发送',
+          icon: 'none'
+        });
+        // 立即刷新聊天记录和会话列表，确保最新消息即时展示
+        await this.loadChatMessages(this.chatSessions.find(item => item.username === this.currentChat)?.userId);
+        await this.loadChatSessions();
+        this.messageText = '';
+        this.$nextTick(() => {
+          const el = document.getElementById('chat-bottom');
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        });
+      } catch (error) {
+        console.error('消息发送失败:', error);
+        uni.showToast({
+          title: '发送失败',
+          icon: 'none'
+        });
+      }
     },
-    
     // 发送新消息
-    sendNewMessage() {
+    async sendNewMessage() {
       if (!this.recipient.trim()) {
         uni.showToast({
           title: '请输入收件人',
@@ -193,7 +378,6 @@ export default {
         });
         return;
       }
-      
       if (!this.newMessageText.trim()) {
         uni.showToast({
           title: '消息不能为空',
@@ -201,15 +385,35 @@ export default {
         });
         return;
       }
-      
-      // 这里应该有发送消息的逻辑
-      uni.showToast({
-        title: '消息已发送',
-        icon: 'none'
-      });
-      
-      // 发送后返回收件箱
-      this.backToInbox();
+      try {
+        const res = await sendChatMessage({
+          esReceiver: this.recipient,
+          esContent: this.newMessageText,
+          esSenderName: this.userInfo.username,
+          esReceiverName: this.recipient,
+          esSenderId: this.userInfo.id || this.userInfo.userId
+        });
+        uni.showToast({
+          title: '消息已发送',
+          icon: 'none'
+        });
+        // 新消息发送后刷新会话列表
+        await this.loadChatSessions();
+        this.newMessageText = '';
+        this.backToInbox();
+      } catch (error) {
+        console.error('消息发送失败:', error);
+        uni.showToast({
+          title: '发送失败',
+          icon: 'none'
+        });
+      }
+    },
+    
+    // 格式化时间
+    formatTime(timestamp) {
+      const date = new Date(timestamp);
+      return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
     },
     
     // 删除聊天
@@ -408,113 +612,129 @@ export default {
   .chat-header {
     display: flex;
     align-items: center;
-    padding: 30rpx 20rpx;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    background-color: rgba(40, 25, 12, 0.7);
-    border-radius: 16rpx 16rpx 0 0;
-    margin-bottom: 10rpx;
-    
+    justify-content: space-between;
+    padding: 32rpx 40rpx 28rpx 40rpx;
+    background: linear-gradient(90deg, rgba(40,25,12,0.95) 0%, rgba(129,182,76,0.18) 100%);
+    border-bottom: 2rpx solid #81B64C;
+    border-radius: 0 0 32rpx 32rpx;
+    box-shadow: 0 8rpx 24rpx rgba(129,182,76,0.08);
+    position: relative;
+    z-index: 2;
     .back-btn {
-      padding: 12rpx;
-      background-color: rgba(0, 0, 0, 0.2);
+      padding: 10rpx;
+      background: rgba(255,255,255,0.08);
       border-radius: 50%;
-      width: 60rpx;
-      height: 60rpx;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      
+      transition: background 0.2s;
+      &:active {
+        background: rgba(129,182,76,0.18);
+      }
       .back-icon {
-        color: white;
         font-size: 40rpx;
+        color: #fff;
+        font-weight: bold;
       }
     }
-    
     .chat-title {
+      color: #fff;
+      font-size: 40rpx;
+      font-weight: 700;
+      letter-spacing: 2rpx;
+      text-shadow: 0 2rpx 8rpx rgba(129,182,76,0.12);
       flex: 1;
       text-align: center;
-      color: white;
-      font-size: 36rpx;
-      font-weight: 500;
     }
-    
     .delete-chat {
-      color: #ff6b6b;
-      font-size: 30rpx;
-      background-color: rgba(255, 107, 107, 0.1);
-      padding: 10rpx 20rpx;
-      border-radius: 30rpx;
+      color: #ff4d4f;
+      font-size: 32rpx;
+      background: rgba(255,77,79,0.08);
+      border-radius: 24rpx;
+      padding: 8rpx 24rpx;
+      font-weight: 500;
+      transition: background 0.2s;
+      &:active {
+        background: rgba(255,77,79,0.18);
+      }
     }
   }
   
   .chat-messages {
     flex: 1;
-    padding: 20rpx 30rpx;
     overflow-y: auto;
-    background-color: rgba(40, 25, 12, 0.4);
-    border-radius: 0 0 16rpx 16rpx;
-    
+    padding: 20rpx 0 20rpx 0;
+    display: flex;
+    flex-direction: column;
     .chat-message {
+      margin-bottom: 24rpx;
       display: flex;
-      margin-bottom: 40rpx;
-      
-      .avatar {
-        width: 80rpx;
-        height: 80rpx;
-        border-radius: 40rpx;
-        margin-right: 20rpx;
-        border: 2rpx solid rgba(255, 255, 255, 0.3);
-        box-shadow: 0 4rpx 8rpx rgba(0, 0, 0, 0.1);
+      flex-direction: column;
+      &.my-message {
+        align-items: flex-end;
       }
-      
+      &.other-message {
+        align-items: flex-start;
+      }
+      .message-row {
+        display: flex;
+        align-items: flex-end;
+        &.left {
+          flex-direction: row;
+        }
+        &.right {
+          flex-direction: row;
+          justify-content: flex-end;
+        }
+      }
+      .avatar {
+        width: 70rpx;
+        height: 70rpx;
+        border-radius: 50%;
+        margin: 0 16rpx;
+        border: 2rpx solid rgba(255,255,255,0.3);
+      }
       .message-info {
-        flex: 1;
-        
-        .message-sender-time {
-          display: flex;
-          align-items: center;
-          margin-bottom: 10rpx;
-          
-          .sender {
-            color: rgba(255, 255, 255, 0.8);
-            font-size: 28rpx;
-            margin-right: 10rpx;
-            font-weight: 500;
-          }
-          
-          .time {
-            color: rgba(204, 204, 204, 0.7);
-            font-size: 24rpx;
-          }
+        max-width: 60vw;
+        display: flex;
+        flex-direction: column;
+      }
+      .message-sender-time {
+        display: flex;
+        align-items: center;
+        margin-bottom: 4rpx;
+        .sender {
+          font-size: 26rpx;
+          color: #888;
+          margin-right: 12rpx;
         }
-        
-        .message-bubble {
-          background-color: rgba(255, 255, 255, 0.95);
-          border-radius: 4rpx 20rpx 20rpx 20rpx;
-          padding: 16rpx 24rpx;
-          display: inline-block;
-          max-width: 80%;
-          box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
-          position: relative;
-          
-          &:before {
-            content: '';
-            position: absolute;
-            left: -6rpx;
-            top: 0;
-            width: 12rpx;
-            height: 12rpx;
-            background-color: rgba(255, 255, 255, 0.95);
-            transform: rotate(45deg);
-            border-radius: 2rpx;
-          }
-          
-          .message-text {
-            color: #333;
-            font-size: 32rpx;
-            line-height: 1.4;
-          }
+        .time {
+          font-size: 22rpx;
+          color: #bbb;
         }
+      }
+      .message-bubble {
+        background-color: #fff;
+        color: #222;
+        border-radius: 24rpx;
+        padding: 18rpx 28rpx;
+        font-size: 32rpx;
+        box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.08);
+        margin-top: 2rpx;
+        word-break: break-all;
+      }
+      &.my-message .message-bubble {
+        background-color: #81B64C;
+        color: #fff;
+        border-bottom-right-radius: 8rpx;
+        border-bottom-left-radius: 24rpx;
+        border-top-right-radius: 24rpx;
+        border-top-left-radius: 24rpx;
+      }
+      &.other-message .message-bubble {
+        background-color: #fff;
+        color: #222;
+        border-bottom-left-radius: 8rpx;
+        border-bottom-right-radius: 24rpx;
+        border-top-right-radius: 24rpx;
+        border-top-left-radius: 24rpx;
       }
     }
   }
@@ -701,3 +921,10 @@ export default {
   }
 
 </style>
+
+formatTime(timeStr) {
+  if (!timeStr) return '';
+  const date = new Date(timeStr);
+  return `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')} 
+  ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;
+}

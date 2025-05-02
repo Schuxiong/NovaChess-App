@@ -58,7 +58,14 @@
         "template" : "static/index.html",
         "devServer" : {
             "port" : 9090,
-            "https" : false
+            "https" : false,
+            "proxy": {
+                "/api": {
+                    "target": "https://api.deepseek.com",
+                    "changeOrigin": true,
+                    "secure": false
+                }
+            }
         },
         "title" : "RuoYi-App",
         "router" : {

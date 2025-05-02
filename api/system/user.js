@@ -39,3 +39,29 @@ export function uploadAvatar(data) {
     filePath: data.filePath
   })
 }
+
+// 获取用户信息(vue3用户设置专用)
+export function getUserData() {
+  return request({
+    url: '/sys/user/login/setting/getUserData',
+    method: 'get'
+  })
+}
+
+// 用户注册
+export function register(data) {
+  return request({
+    url: '/sys/user/register',
+    method: 'post',
+    params: data
+  })
+}
+
+// 用户编辑(vue3用户设置专用)
+export function userEdit(data) {
+  return request({
+    url: '/sys/user/login/setting/userEdit',
+    method: 'post',
+    data: data
+  })
+}

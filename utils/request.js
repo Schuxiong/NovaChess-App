@@ -13,6 +13,7 @@ const request = config => {
   config.header = config.header || {}
   if (getToken() && !isToken) {
     config.header['Authorization'] = 'Bearer ' + getToken()
+    config.header['X-Access-Token'] = getToken()
   }
   // get请求映射params参数
   if (config.params) {
@@ -26,7 +27,10 @@ const request = config => {
         timeout: config.timeout ||  timeout,
         url: config.baseUrl || baseUrl + config.url,
         data: config.data,
-        header: config.header,
+        header: {
+  ...config.header,
+  'Authorization': getToken()
+},
         dataType: 'json'
       }).then(response => {
         let [error, res] = response
@@ -36,7 +40,13 @@ const request = config => {
           return
         }
         const code = res.data.code || 200
-        const msg = errorCode[code] || res.data.msg || errorCode['default']
+        const msg = errorCode[code] || res.data.msg || res.data.message || errorCode['default']
+        // 处理新API格式的响应
+        if (res.data.success === false) {
+          toast(msg)
+          reject(code)
+          return
+        }
         if (code === 401) {
           showConfirm('登录状态已过期，您可以继续留在该页面，或者重新登录?').then(res => {
             if (res.confirm) {
@@ -52,6 +62,12 @@ const request = config => {
         } else if (code !== 200) {
           toast(msg)
           reject(code)
+        }
+        // 新增：如果返回了新的token，自动更新本地token
+        if(res.data.result && res.data.result.token){
+          try {
+            store.commit('SET_TOKEN', res.data.result.token)
+          } catch(e) {}
         }
         resolve(res.data)
       })

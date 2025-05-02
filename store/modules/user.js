@@ -2,7 +2,7 @@ import config from '@/config'
 import storage from '@/utils/storage'
 import constant from '@/utils/constant'
 import { isHttp, isEmpty } from "@/utils/validate"
-import { login, logout, getInfo } from '@/api/login'
+import { login, logout, getInfo, phoneLogin } from '@/api/login'
 import { getToken, setToken, removeToken } from '@/utils/auth'
 import defAva from '@/static/images/profile.jpg'
 
@@ -44,13 +44,34 @@ const user = {
     Login({ commit }, userInfo) {
       const username = userInfo.username.trim()
       const password = userInfo.password
-      const code = userInfo.code
-      const uuid = userInfo.uuid
+      const captcha = userInfo.captcha
+      const checkKey = userInfo.checkKey
       return new Promise((resolve, reject) => {
-        login(username, password, code, uuid).then(res => {
-          setToken(res.token)
-          commit('SET_TOKEN', res.token)
-          resolve()
+        login(username, password, captcha, checkKey).then(res => {
+          setToken(res.result.token)
+          commit('SET_TOKEN', res.result.token)
+          uni.reLaunch({
+            url: '/pages/index'
+          })
+          resolve(res)
+        }).catch(error => {
+          reject(error)
+        })
+      })
+    },
+    
+    // 手机号登录
+    PhoneLogin({ commit }, userInfo) {
+      const phonenumber = userInfo.phonenumber.trim()
+      const captcha = userInfo.captcha
+      return new Promise((resolve, reject) => {
+        phoneLogin(phonenumber, captcha).then(res => {
+          setToken(res.result.token)
+          commit('SET_TOKEN', res.result.token)
+          uni.reLaunch({
+            url: '/pages/index'
+          })
+          resolve(res)
         }).catch(error => {
           reject(error)
         })

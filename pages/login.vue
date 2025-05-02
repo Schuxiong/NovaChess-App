@@ -10,39 +10,66 @@
     <view class="login-form-content">
       <view class="form-title">登录</view>
       
-      <view class="input-item flex align-center">
-        <input v-model="loginForm.username" class="input" type="text" placeholder="用户名" maxlength="30" />
+      <!-- 登录方式切换 -->
+      <view class="login-type-switch">
+        <view 
+          class="login-type-item" 
+          :class="{active: loginType === 'account'}"
+          @click="switchLoginType('account')"
+        >账号登录</view>
+        <view 
+          class="login-type-item" 
+          :class="{active: loginType === 'phone'}"
+          @click="switchLoginType('phone')"
+        >手机登录</view>
       </view>
       
-      <view class="input-item flex align-center">
-        <input v-model="loginForm.password" type="password" class="input" placeholder="密码" maxlength="20" />
-      </view>
-      
-      <view class="input-item flex align-center captcha-container" v-if="captchaEnabled">
-        <input v-model="loginForm.code" type="number" class="input captcha-input" placeholder="验证码" maxlength="4" />
-        <view class="captcha-image"> 
-          <image :src="codeUrl" @click="getCode" class="login-code-img"></image>
+      <!-- 账号密码登录 -->
+      <block v-if="loginType === 'account'">
+        <view class="input-item flex align-center">
+          <input v-model="loginForm.username" class="input" type="text" placeholder="用户名" maxlength="30" />
         </view>
-      </view>
+        
+        <view class="input-item flex align-center">
+          <input v-model="loginForm.password" type="password" class="input" placeholder="密码" maxlength="20" />
+        </view>
+        
+        <view class="input-item flex align-center captcha-container" v-if="captchaEnabled">
+          <input v-model="loginForm.code" type="text" pattern="[0-9]*" inputmode="numeric" class="input captcha-input" placeholder="验证码" maxlength="4" />
+          <view class="captcha-image"> 
+            <image :src="codeUrl" @click="getCode" class="login-code-img"></image>
+          </view>
+        </view>
+      </block>
+      
+      <!-- 手机号登录 -->
+      <block v-else>
+        <view class="input-item flex align-center">
+          <input v-model="phoneForm.phonenumber" class="input" type="number" placeholder="手机号码" maxlength="11" />
+        </view>
+        
+        <view class="input-item flex align-center captcha-container">
+          <input v-model="phoneForm.code" type="text" pattern="[0-9]*" inputmode="numeric" class="input captcha-input" placeholder="验证码" maxlength="6" />
+          <view class="captcha-btn" @click="getPhoneCode">
+            <text>{{phoneCodeText}}</text>
+          </view>
+        </view>
+      </block>
       
       <view class="action-btn">
         <button @click="handleLogin" class="login-btn">登录</button>
       </view>
-      
-
       
       <view class="register-link" v-if="register">
         <text class="register-title">还没有账号?</text>
         <text @click="handleUserRegister" class="register-btn">注册 - 开始下棋!</text>
       </view>
     </view>
-     
-
   </view>
 </template>
 
 <script>
-  import { getCodeImg } from '@/api/login'
+  import { getCodeImg, phoneLogin } from '@/api/login'
   import TopSpacing from '@/components/TopSpacing.vue'
 
   export default {
@@ -58,12 +85,25 @@
         rememberMe: false,
         // 用户注册开关
         register: true,
+        // 登录方式：account-账号密码登录，phone-手机号登录
+        loginType: 'account',
+        // 手机验证码按钮文本
+        phoneCodeText: '获取验证码',
+        // 手机验证码倒计时
+        phoneCodeTimer: null,
+        phoneCodeCounter: 60,
         globalConfig: getApp().globalData.config,
         loginForm: {
           username: "",
           password: "",
           code: "",
-          uuid: ""
+          uuid: "",
+          checkKey: "",
+          captcha: ""
+        },
+        phoneForm: {
+          phonenumber: "",
+          code: ""
         }
       }
     },
@@ -74,6 +114,10 @@
       this.statusBarHeight = systemInfo.statusBarHeight
     },
     methods: {
+      // 切换登录方式
+      switchLoginType(type) {
+        this.loginType = type
+      },
       // 切换记住我
       toggleRememberMe() {
         this.rememberMe = !this.rememberMe
@@ -92,38 +136,101 @@
         let site = this.globalConfig.appInfo.agreements[1]
         this.$tab.navigateTo(`/pages/common/webview/index?title=${site.title}&url=${site.url}`)
       },
+      // 获取手机验证码
+      getPhoneCode() {
+        if (this.phoneCodeTimer) {
+          return
+        }
+        
+        if (!this.phoneForm.phonenumber) {
+          this.$modal.msgError("请输入手机号码")
+          return
+        }
+        
+        // 验证手机号格式
+        if (!/^1[3|4|5|6|7|8|9][0-9]\d{8}$/.test(this.phoneForm.phonenumber)) {
+          this.$modal.msgError("请输入正确的手机号码")
+          return
+        }
+        
+        // 这里应该调用发送验证码的接口
+        // 为了演示，直接开始倒计时
+        this.$modal.msgSuccess("验证码已发送")
+        this.phoneCodeCounter = 60
+        this.phoneCodeText = `${this.phoneCodeCounter}秒后重新获取`
+        
+        this.phoneCodeTimer = setInterval(() => {
+          this.phoneCodeCounter--
+          this.phoneCodeText = `${this.phoneCodeCounter}秒后重新获取`
+          
+          if (this.phoneCodeCounter <= 0) {
+            clearInterval(this.phoneCodeTimer)
+            this.phoneCodeTimer = null
+            this.phoneCodeText = '获取验证码'
+          }
+        }, 1000)
+      },
       // 获取图形验证码
       getCode() {
         getCodeImg().then(res => {
           this.captchaEnabled = res.captchaEnabled === undefined ? true : res.captchaEnabled
           if (this.captchaEnabled) {
-            this.codeUrl = 'data:image/gif;base64,' + res.img
+            // 检查返回的图片数据是否已经包含前缀
+            this.codeUrl = res.img.startsWith('data:image') ? res.img : 'data:image/gif;base64,' + res.img
             this.loginForm.uuid = res.uuid
           }
         })
       },
       // 登录方法
       async handleLogin() {
-        if (this.loginForm.username === "") {
-          this.$modal.msgError("请输入账号")
-        } else if (this.loginForm.password === "") {
-          this.$modal.msgError("请输入密码")
-        } else if (this.loginForm.code === "" && this.captchaEnabled) {
-          this.$modal.msgError("请输入验证码")
+        if (this.loginType === 'account') {
+          // 账号密码登录验证
+          if (this.loginForm.username === "") {
+            this.$modal.msgError("请输入账号")
+          } else if (this.loginForm.password === "") {
+            this.$modal.msgError("请输入密码")
+          } else if (this.loginForm.code === "" && this.captchaEnabled) {
+            this.$modal.msgError("请输入验证码")
+          } else {
+            this.$modal.loading("登录中，请耐心等待...")
+            this.pwdLogin()
+          }
         } else {
-          this.$modal.loading("登录中，请耐心等待...")
-          this.pwdLogin()
+          // 手机号登录验证
+          if (this.phoneForm.phonenumber === "") {
+            this.$modal.msgError("请输入手机号码")
+          } else if (this.phoneForm.code === "") {
+            this.$modal.msgError("请输入验证码")
+          } else {
+            this.$modal.loading("登录中，请耐心等待...")
+            this.mobileLogin()
+          }
         }
       },
       // 密码登录
       async pwdLogin() {
-        this.$store.dispatch('Login', this.loginForm).then(() => {
+        const loginData = {
+          username: this.loginForm.username,
+          password: this.loginForm.password,
+          captcha: this.loginForm.code,
+          checkKey: this.loginForm.uuid
+        };
+        this.$store.dispatch('Login', loginData).then(() => {
           this.$modal.closeLoading()
           this.loginSuccess()
         }).catch(() => {
           if (this.captchaEnabled) {
             this.getCode()
           }
+        })
+      },
+      // 手机号登录
+      async mobileLogin() {
+        this.$store.dispatch('PhoneLogin', this.phoneForm).then(() => {
+          this.$modal.closeLoading()
+          this.loginSuccess()
+        }).catch(() => {
+          this.$modal.closeLoading()
         })
       },
       // 登录成功后，处理函数
@@ -218,6 +325,37 @@
         }
       }
       
+      .login-type-switch {
+        display: flex;
+        margin-bottom: 30rpx;
+        
+        .login-type-item {
+          flex: 1;
+          text-align: center;
+          padding: 15rpx 0;
+          font-size: 28rpx;
+          color: #EEE;
+          position: relative;
+          transition: all 0.3s;
+          
+          &.active {
+            color: #7fa650;
+            font-weight: bold;
+            
+            &:after {
+              content: '';
+              position: absolute;
+              bottom: -5rpx;
+              left: 30%;
+              width: 40%;
+              height: 4rpx;
+              background-color: #7fa650;
+              border-radius: 2rpx;
+            }
+          }
+        }
+      }
+      
       .captcha-container {
         display: flex;
         
@@ -233,6 +371,18 @@
             width: 100%;
             height: 100%;
           }
+        }
+        
+        .captcha-btn {
+          width: 200rpx;
+          height: 90rpx;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background-color: rgba(127, 166, 80, 0.8);
+          color: #fff;
+          font-size: 24rpx;
+          border-radius: 0 8rpx 8rpx 0;
         }
       }
 

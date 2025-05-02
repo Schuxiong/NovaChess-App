@@ -22,12 +22,7 @@
         <input v-model="registerForm.confirmPassword" type="password" class="input" placeholder="确认密码" maxlength="20" />
       </view>
       
-      <view class="input-item flex align-center captcha-container" v-if="captchaEnabled">
-        <input v-model="registerForm.code" type="number" class="input captcha-input" placeholder="验证码" maxlength="4" />
-        <view class="captcha-image"> 
-          <image :src="codeUrl" @click="getCode" class="login-code-img"></image>
-        </view>
-      </view>
+      
       
       <view class="action-btn">
         <button @click="handleRegister()" class="register-btn">注册账号</button>
@@ -43,7 +38,7 @@
 </template>
 
 <script>
-  import { getCodeImg, register } from '@/api/login'
+  import { register } from '@/api/login'
   import TopSpacing from '@/components/TopSpacing.vue'
 
   export default {
@@ -53,8 +48,7 @@
     data() {
       return {
         statusBarHeight: 0,
-        codeUrl: "",
-        captchaEnabled: true,
+        
         globalConfig: getApp().globalData.config,
         registerForm: {
           username: "",
@@ -76,16 +70,7 @@
       handleUserLogin() {
         this.$tab.navigateTo(`/pages/login`)
       },
-      // 获取图形验证码
-      getCode() {
-        getCodeImg().then(res => {
-          this.captchaEnabled = res.captchaEnabled === undefined ? true : res.captchaEnabled
-          if (this.captchaEnabled) {
-            this.codeUrl = 'data:image/gif;base64,' + res.img
-            this.registerForm.uuid = res.uuid
-          }
-        })
-      },
+      
       // 注册方法
       async handleRegister() {
         if (this.registerForm.username === "") {
@@ -96,8 +81,7 @@
           this.$modal.msgError("请再次输入您的密码")
         } else if (this.registerForm.password !== this.registerForm.confirmPassword) {
           this.$modal.msgError("两次输入的密码不一致")
-        } else if (this.registerForm.code === "" && this.captchaEnabled) {
-          this.$modal.msgError("请输入验证码")
+        
         } else {
           this.$modal.loading("注册中，请耐心等待...")
           this.register()
@@ -105,7 +89,12 @@
       },
       // 用户注册
       async register() {
-        register(this.registerForm).then(res => {
+        const registerData = {
+          username: this.registerForm.username,
+          password: this.registerForm.password
+        }
+        
+        register(registerData).then(res => {
           this.$modal.closeLoading()
           uni.showModal({
           	title: "系统提示",
@@ -117,9 +106,7 @@
           	}
           })
         }).catch(() => {
-          if (this.captchaEnabled) {
-            this.getCode()
-          }
+          
         })
       }
     }
@@ -166,7 +153,7 @@
       .form-title {
         font-size: 42rpx;
         font-weight: bold;
-        color: #EEE;
+        color: #EEE3;
         margin-bottom: 40rpx;
         text-align: center;
       }

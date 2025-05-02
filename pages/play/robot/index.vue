@@ -62,7 +62,8 @@
           <view class="robot-details">
             <!-- 气泡框自我介绍 -->
             <view class="speech-bubble">
-              <text v-if="isAiRobot">我是基于DeepSeek大语言模型的智能象棋教练。我可以分析棋局，提供思考过程，并给出下一步最佳走法。</text>
+              <text v-if="isAiRobot && apiAvailable === false">由于小程序限制，AI功能不可用。我会使用内置的基础策略进行对弈。需要在微信开发者平台配置合法域名后才能使用AI功能。</text>
+              <text v-else-if="isAiRobot">我是基于{{ modelDisplayName }}大语言模型的智能象棋教练。我可以分析棋局，提供思考过程，并给出下一步最佳走法。</text>
               <text v-else>这是一位普通机器人棋手，它会基于预设的策略进行下棋。难度适中，适合休闲对弈。</text>
             </view>
             
@@ -77,6 +78,83 @@
               <!-- 国旗 -->
               <image v-if="robotFlag" class="robot-flag" :src="robotFlag" mode="aspectFit"></image>
             </view>
+          </view>
+        </view>
+        
+        <!-- AI机器人模型选择 -->
+        <view v-if="isAiRobot" class="model-selection">
+          <text class="model-title">选择AI模型</text>
+          <view class="model-options">
+            <view 
+              v-for="(model, index) in availableModels" 
+              :key="index"
+              class="model-option"
+              :class="{ 'selected': currentModel === model.id, 'unavailable': !model.available }"
+              @click="selectModel(model.id)"
+            >
+              <text>{{ model.name }}</text>
+              <view v-if="model.available" class="model-status available"></view>
+              <view v-else class="model-status unavailable"></view>
+            </view>
+          </view>
+        </view>
+        
+        <!-- AI高级设置 -->
+        <view v-if="isAiRobot" class="ai-advanced-settings">
+          <text class="settings-title">高级设置</text>
+          
+          <!-- 思考深度设置 -->
+          <view class="settings-row">
+            <text class="setting-label">思考深度</text>
+            <view class="slider-container">
+              <slider 
+                :value="thinkingDepth" 
+                :min="1" 
+                :max="5" 
+                :step="1" 
+                :show-value="true" 
+                @change="handleThinkingDepthChange" 
+                activeColor="#81B64C"
+                backgroundColor="#444"
+              />
+            </view>
+            <text class="setting-value">{{ thinkingDepthLabels[thinkingDepth-1] }}</text>
+          </view>
+          
+          <!-- 创造性设置 -->
+          <view class="settings-row">
+            <text class="setting-label">创造性</text>
+            <view class="slider-container">
+              <slider 
+                :value="temperature * 100" 
+                :min="0" 
+                :max="100" 
+                :step="10" 
+                :show-value="true" 
+                @change="handleTemperatureChange" 
+                activeColor="#81B64C"
+                backgroundColor="#444"
+              />
+            </view>
+            <text class="setting-value">{{ temperatureLabels[Math.round(temperature * 10)] }}</text>
+          </view>
+          
+          <!-- 分析详细程度 -->
+          <view class="settings-row">
+            <text class="setting-label">分析详细程度</text>
+            <view class="slider-container">
+              <slider 
+                :value="analysisDetail" 
+                :min="1" 
+                :max="3" 
+                :step="1" 
+                :show-value="true" 
+                @change="handleAnalysisDetailChange" 
+                activeColor="#81B64C"
+                backgroundColor="#444"
+              />
+            </view>
+            <text class="setting-value">{{ analysisDetailLabels[analysisDetail-1] }}</text>
           </view>
         </view>
         
@@ -333,6 +411,7 @@ import {
   resetChessBoardState
 } from '@/utils/chess/cheesLogic.js';
 import { getNextMove } from './utils/deepseekService.js';
+import { checkApiAvailability, checkAllModelsAvailability, setModel, getCurrentModel, getAvailableModels } from './utils/deepseekService.js';
 
 export default {
   components: {
@@ -435,6 +514,19 @@ export default {
       isAiRobot: false, // 是否是AI驱动的机器人（比赛常客）
       aiThinking: false, // AI是否正在思考
       aiThoughts: '', // AI的思考过程
+      apiAvailable: true, // 新增：API可用状态
+      availableModels: [], // 可用的模型列表
+      currentModel: 'deepseek', // 当前选择的模型
+      modelDisplayName: 'DeepSeek', // 显示的模型名称
+      
+      // AI高级设置
+      thinkingDepth: 3, // 1-5，思考深度
+      thinkingDepthLabels: ['浅显', '普通', '深入', '精细', '极致'],
+      temperature: 0.7, // 0-1，模型创造性/随机性
+      temperatureLabels: ['严谨', '保守', '平衡', '创新', '灵活', '多变', '意外', '惊喜', '随机', '混沌', '疯狂'],
+      analysisDetail: 2, // 1-3，分析详细程度
+      analysisDetailLabels: ['简洁', '标准', '详尽'],
+      maxTokens: 800, // 默认最大生成长度
     };
   },
   onLoad() {
@@ -442,9 +534,60 @@ export default {
     const systemInfo = uni.getSystemInfoSync()
     this.statusBarHeight = systemInfo.statusBarHeight
     
+    // 检查API可用性并加载可用模型
+    this.checkApiStatus();
+    
     // ... existing onLoad code ...
   },
   methods: {
+    // 检查API可用性状态
+    async checkApiStatus() {
+      try {
+        // 检查所有模型API可用性
+        const modelStatus = await checkAllModelsAvailability();
+        
+        // 更新模型列表
+        this.loadAvailableModels();
+        
+        // 计算是否有任何API可用
+        this.apiAvailable = Object.values(modelStatus).some(status => status === true);
+        console.log('API可用状态:', this.apiAvailable);
+      } catch (error) {
+        console.error('检查API可用性失败:', error);
+        this.apiAvailable = false;
+      }
+    },
+    
+    // 加载可用的模型列表
+    loadAvailableModels() {
+      this.availableModels = getAvailableModels();
+      // 更新当前使用的模型
+      this.currentModel = getCurrentModel();
+      // 设置显示名称
+      this.updateModelDisplayName();
+    },
+    
+    // 选择模型
+    selectModel(modelId) {
+      if (setModel(modelId)) {
+        this.currentModel = modelId;
+        this.updateModelDisplayName();
+        uni.showToast({
+          title: `已切换至${this.modelDisplayName}模型`,
+          icon: 'none',
+          duration: 1500
+        });
+      }
+    },
+    
+    // 更新模型显示名称
+    updateModelDisplayName() {
+      const model = this.availableModels.find(m => m.id === this.currentModel);
+      if (model) {
+        this.modelDisplayName = model.name;
+      }
+    },
+    
     // 初始化棋盘状态
     initBoardState() {
       // 初始化一个8x8的棋盘数组
@@ -1270,6 +1413,15 @@ export default {
         this.robotRating = expertRobot.rating;
         this.robotFlag = '';
         this.isAiRobot = true;
+        
+        // 如果选择的是AI机器人，但API不可用，显示提示
+        if (!this.apiAvailable) {
+          uni.showToast({
+            title: 'AI功能不可用，将使用备用策略',
+            icon: 'none',
+            duration: 2000
+          });
+        }
       }
     },
     
@@ -1354,7 +1506,80 @@ export default {
         // 显示欢迎消息
         this.showRobotMessage("欢迎挑战！请先行动吧。");
       }
-    }
+    },
+    
+    // 思考深度变化处理
+    handleThinkingDepthChange(e) {
+      this.thinkingDepth = e.detail.value;
+    },
+    
+    // 温度参数变化处理
+    handleTemperatureChange(e) {
+      this.temperature = e.detail.value / 100;
+    },
+    
+    // 分析详细程度变化处理
+    handleAnalysisDetailChange(e) {
+      this.analysisDetail = e.detail.value;
+      // 根据详细程度调整token长度
+      switch(this.analysisDetail) {
+        case 1: this.maxTokens = 500; break;
+        case 2: this.maxTokens = 800; break;
+        case 3: this.maxTokens = 1200; break;
+      }
+    },
+
+    // 使用AI获取下一步棋
+    async getAiNextMove() {
+      try {
+        this.aiThinking = true;
+        
+        // 构建AI请求参数
+        const aiParams = {
+          temperature: this.temperature,
+          maxTokens: this.maxTokens,
+          thinkingDepth: this.thinkingDepth
+        };
+        
+        const nextMove = await getNextMove(
+          this.selectedRobotId, 
+          this.boardState, 
+          this.moveHistory, 
+          this.playerColor,
+          aiParams // 传递AI参数
+        );
+        
+        // 保存AI思考过程和使用的模型
+        this.aiThoughts = nextMove.thoughts;
+        if (nextMove.modelUsed) {
+          console.log(`使用模型: ${nextMove.modelUsed}`);
+        }
+        
+        // 显示机器人消息
+        if (nextMove.message) {
+          this.showRobotMessage(nextMove.message);
+        }
+        
+        // 执行移动
+        this.makeMove(nextMove.from, nextMove.to, { 
+          promoteTo: nextMove.promotion 
+        });
+        
+      } catch (error) {
+        console.error('AI走棋失败:', error);
+        
+        // 如果AI失败，使用基础策略
+        console.log('使用基础策略走棋');
+        this.showRobotMessage('我将使用基础策略走棋。');
+        
+        const basicMove = basicAiMove(this.boardState, this.playerColor === 'white' ? 'black' : 'white');
+        if (basicMove) {
+          this.makeMove(basicMove.from, basicMove.to);
+        }
+      } finally {
+        this.aiThinking = false;
+      }
+    },
   }
 }
 </script>
@@ -1942,5 +2167,102 @@ export default {
   font-style: italic;
   max-height: 200rpx;
   overflow-y: auto;
+}
+
+.model-selection {
+  margin-top: 20rpx;
+  margin-bottom: 20rpx;
+  padding: 20rpx;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 10rpx;
+  
+  .model-title {
+    font-size: 28rpx;
+    color: #fff;
+    margin-bottom: 15rpx;
+  }
+  
+  .model-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15rpx;
+    
+    .model-option {
+      flex: 1;
+      min-width: 150rpx;
+      background-color: rgba(255, 255, 255, 0.15);
+      border-radius: 8rpx;
+      padding: 15rpx;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      
+      &.selected {
+        background-color: #81B64C;
+        border: 2rpx solid #fff;
+      }
+      
+      &.unavailable {
+        opacity: 0.5;
+      }
+      
+      text {
+        color: #fff;
+        font-size: 26rpx;
+      }
+      
+      .model-status {
+        width: 16rpx;
+        height: 16rpx;
+        border-radius: 8rpx;
+        
+        &.available {
+          background-color: #4CAF50;
+        }
+        
+        &.unavailable {
+          background-color: #F44336;
+        }
+      }
+    }
+  }
+}
+
+.ai-advanced-settings {
+  margin-top: 20rpx;
+  margin-bottom: 20rpx;
+  padding: 20rpx;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 10rpx;
+  
+  .settings-title {
+    font-size: 28rpx;
+    color: #fff;
+    margin-bottom: 15rpx;
+  }
+  
+  .settings-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15rpx;
+    
+    .setting-label {
+      width: 180rpx;
+      color: #eee;
+      font-size: 24rpx;
+    }
+    
+    .slider-container {
+      flex: 1;
+      padding: 0 10rpx;
+    }
+    
+    .setting-value {
+      width: 80rpx;
+      color: #fff;
+      font-size: 24rpx;
+      text-align: right;
+    }
+  }
 }
 </style> 
