@@ -5,9 +5,16 @@
       <view class="invitation-title">对战邀请</view>
       
       <view class="invitation-content">
-        <image class="inviter-avatar" :src="inviter.avatar || '/static/images/match/avatar-default.png'" mode="aspectFit"></image>
-        <view class="inviter-name">{{ inviter.name || '未知玩家' }}</view>
+        <image class="inviter-avatar" :src="getAvatar()" mode="aspectFit"></image>
+        <view class="inviter-name">{{ getInviterName() }}</view>
         <view class="invitation-info">邀请你进行对战</view>
+        
+        <!-- 显示执棋颜色 -->
+        <view class="play-as-info">
+          <text class="play-as-text">您将执{{ getYourColor() }}子</text>
+          <view class="color-display" :class="getColorClass()"></view>
+        </view>
+        
         <view class="time-control">
           <image class="clock-icon" src="https://pic1.imgdb.cn/item/67f3c5ffe381c3632bee9011.png" mode="aspectFit"></image>
           <text class="time-text">{{ inviter.timeControl || '10 min' }}</text>
@@ -35,9 +42,14 @@ export default {
       default: () => ({
         id: 0,
         name: '',
+        sourceUserAccount: '',
         rating: 0,
         avatar: '',
-        timeControl: '10 min'
+        timeControl: '10 min',
+        inviteId: '',
+        playAs: 'white', // 邀请者执棋的颜色
+        sourceOnePart: 2, // 1表示黑色，2表示白色
+        acceptOnePart: 1  // 1表示黑色，2表示白色
       })
     }
   },
@@ -50,6 +62,54 @@ export default {
     // 关闭弹窗
     close() {
       this.$refs.invitationPopup.close();
+    },
+    
+    // 获取邀请者名称
+    getInviterName() {
+      // 尝试从多个可能的字段获取名称
+      return this.inviter.name || 
+             this.inviter.userName || 
+             this.inviter.username || 
+             this.inviter.sourceUserAccount || 
+             this.inviter.sourceUsername || 
+             this.inviter.realname || 
+             '未知玩家';
+    },
+    
+    // 获取邀请者头像
+    getAvatar() {
+      // 尝试从多个可能的字段获取头像
+      return this.inviter.avatar || 
+             this.inviter.headImgUrl || 
+             this.inviter.headImg || 
+             this.inviter.pic || 
+             '/static/images/match/avatar-default.png';
+    },
+    
+    // 获取你要执的棋子颜色
+    getYourColor() {
+      // 从多种可能的属性中获取颜色信息
+      if (this.inviter.acceptOnePart === 1) {
+        return '黑';
+      } else if (this.inviter.acceptOnePart === 2) {
+        return '白';
+      } else if (this.inviter.playAs === 'white') {
+        return '黑'; // 如果邀请者执白，那么你执黑
+      } else if (this.inviter.playAs === 'black') {
+        return '白'; // 如果邀请者执黑，那么你执白
+      }
+      return '随机'; // 默认
+    },
+    
+    // 获取颜色样式类
+    getColorClass() {
+      const color = this.getYourColor();
+      if (color === '白') {
+        return 'white-color';
+      } else if (color === '黑') {
+        return 'black-color';
+      }
+      return 'random-color';
     },
     
     // 接受邀请
@@ -113,6 +173,37 @@ export default {
       font-size: 28rpx;
       color: rgba(255, 255, 255, 0.7);
       margin-bottom: 20rpx;
+    }
+    
+    .play-as-info {
+      display: flex;
+      align-items: center;
+      margin-bottom: 20rpx;
+      
+      .play-as-text {
+        font-size: 28rpx;
+        color: #FFFFFF;
+        margin-right: 10rpx;
+      }
+      
+      .color-display {
+        width: 30rpx;
+        height: 30rpx;
+        border-radius: 50%;
+        
+        &.white-color {
+          background-color: #FFFFFF;
+          border: 1px solid #AAA;
+        }
+        
+        &.black-color {
+          background-color: #000000;
+        }
+        
+        &.random-color {
+          background: linear-gradient(to right, white 0%, white 50%, black 50%, black 100%);
+        }
+      }
     }
     
     .time-control {

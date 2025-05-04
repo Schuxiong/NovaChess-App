@@ -22,40 +22,69 @@
     }
   ],
   "paths": {
-    "/sys/message/sysMessage/getChatSessions": {
+    "/pair/chessFriendPair/cancelInvitation": {
+      "post": {
+        "tags": [
+          "对弈关系"
+        ],
+        "summary": "对弈关系-取消邀请",
+        "operationId": "cancelInvitation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultObject"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "X-Access-Token": []
+          }
+        ]
+      }
+    },
+    "/pair/chessFriendPair/getInvitationStatus": {
       "get": {
         "tags": [
-          "消息管理"
+          "对弈关系"
         ],
-        "summary": "获取聊天会话列表",
-        "operationId": "getChatSessions",
+        "summary": "对弈关系-查询邀请状态",
+        "operationId": "getInvitationStatus",
         "parameters": [
           {
-            "name": "userId",
+            "name": "id",
             "in": "query",
             "required": true,
             "schema": {
               "type": "string"
-            }
-          },
-          {
-            "name": "pageNo",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 1
-            }
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 10
             }
           }
         ],

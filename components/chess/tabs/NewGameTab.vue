@@ -1,6 +1,6 @@
 <!-- components/chess/tabs/NewGameTab.vue (继续) -->
 <template>
-  <view class="tab-content">
+  <view class="tab-content" @click="closeDropdown">
     <!-- 判断是否显示好友tab -->
     <view v-if="showFriendsTab">
       <friends-tab 
@@ -27,7 +27,7 @@
         <view class="selected-friend">
           <image class="friend-avatar" :src="selectedFriend.avatar" mode="aspectFit"></image>
           <view class="friend-info">
-            <text class="friend-name">{{ selectedFriend.name }}</text>
+            <text class="friend-name">{{ selectedFriend.userName }}</text>
             <text class="friend-rating">({{ selectedFriend.rating }})</text>
           </view>
         </view>
@@ -130,7 +130,44 @@
         
         <!-- 指定对手 -->
         <view class="option-section">
-          <input class="opponent-input" placeholder="输入用户名称" placeholder-style="color: rgba(255,255,255,0.5);" />
+          <view class="opponent-selector" @click.stop>
+            <input 
+              class="opponent-input" 
+              placeholder="输入或选择对手" 
+              placeholder-style="color: rgba(255,255,255,0.5);" 
+              v-model="opponentSearchText"
+              @focus="onOpponentInputFocus"
+              @input="showOpponentDropdown = true"
+              @click.stop
+            />
+            <view class="dropdown-icon" @click="showOpponentDropdown = !showOpponentDropdown">
+              <uni-icons type="arrow-down" size="18" color="#AAAAAA"></uni-icons>
+            </view>
+            <!-- 下拉列表 -->
+            <view class="opponent-dropdown" v-if="showOpponentDropdown">
+              <view v-if="loading" class="loading-item">加载中...</view>
+              <view v-else-if="filteredOpponents().length === 0" class="no-data-item">无匹配对手</view>
+              <scroll-view scroll-y style="max-height: 300rpx;">
+                <view 
+                  v-for="(item, index) in filteredOpponents()" 
+                  :key="index" 
+                  class="opponent-item"
+                  @click="selectOpponent(item)"
+                >
+                  <image 
+                    class="opponent-avatar" 
+                    :src="item.avatar || '/static/images/match/avatar-default.png'" 
+                    mode="aspectFit"
+                  ></image>
+                  <view class="opponent-info">
+                    <!-- 显示调试数据方便排查问题 -->
+                    <text class="opponent-name">{{ item.userName || '未知用户' }} (ID: {{ item.id }})</text>
+                    <text v-if="item.rating" class="opponent-rating">({{ item.rating }})</text>
+                  </view>
+                </view>
+              </scroll-view>
+            </view>
+          </view>
         </view>
       </view>
       
@@ -160,7 +197,7 @@
       </view>
 
       <!-- 开玩按钮 -->
-      <view class="play-button" @click="onStartGame">
+      <view class="play-button" @click="startGame">
         <text class="button-text">开玩!</text>
       </view>
       
@@ -222,17 +259,32 @@
         <view class="popup-close" @click="closeModePopup">确定</view>
       </view>
     </uni-popup>
+    
+    <!-- 匹配状态弹窗 -->
+    <matching-status-popup 
+      ref="matchingStatusPopup"
+      :opponent="selectedOpponent || selectedFriend"
+      :inviteId="currentInviteId"
+      :time-control="timeControl"
+      :play-as="playAs"
+      v-if="showMatchingPopup"
+      @cancel="handleCancelInvite"
+      @close="handleMatchingPopupClose"
+    />
   </view>
 </template>
 
 <script>
 import uniPopup from '@/components/uni-popup/uni-popup.vue';
 import FriendsTab from './FriendsTab.vue';
+import MatchingStatusPopup from '../MatchingStatusPopup.vue';
+import { getOpponentsList, addChessFriendPair, getInvitationStatus, cancelInvitation, clearPendingInvitations } from '@/api/pair';
 
 export default {
   components: {
     uniPopup,
-    FriendsTab
+    FriendsTab,
+    MatchingStatusPopup
   },
   props: {
     timeControl: {
@@ -266,11 +318,23 @@ export default {
       showFriendGameSettings: false,
       selectedFriend: {
         id: 0,
-        name: '',
+        userName: '',
         rating: 0,
         avatar: '',
         badge: ''
-      }
+      },
+      opponentsList: [],
+      opponentSearchText: '',
+      showOpponentDropdown: false,
+      selectedOpponent: null,
+      loading: false,
+      
+      // 添加邀请相关状态
+      currentInviteId: '', // 当前邀请ID
+      inviteStatusTimer: null, // 查询邀请状态的定时器
+      inviteStatus: 0, // 0-待接受, 1-已接受, 2-已拒绝
+      showMatchingPopup: false, // 是否显示匹配弹窗
+      inviteStatusErrorCount: undefined, // 用于记录查询失败次数
     }
   },
   methods: {
@@ -278,12 +342,257 @@ export default {
       this.$emit('toggle-more-options');
     },
     
-    onStartGame() {
-      this.$emit('start-game');
+    startGame() {
+      // 如果有选中的对手，发送邀请
+      if (this.selectedOpponent) {
+        console.log('邀请对手:', this.selectedOpponent);
+        
+        // 获取当前用户ID
+        const userId = uni.getStorageSync('userId') || '';
+        if (!userId) {
+          uni.showToast({
+            title: '用户未登录，无法发送邀请',
+            icon: 'none'
+          });
+          return;
+        }
+        
+        // 确定发起方执棋颜色
+        const sourceOnePart = this.playAs === 'black' ? 1 : (this.playAs === 'white' ? 2 : (Math.random() < 0.5 ? 1 : 2));
+        // 设置接受方执棋颜色（与发起方相反）
+        const acceptOnePart = sourceOnePart === 1 ? 2 : 1;
+        
+        // 添加时间戳，避免邀请数据重复
+        const inviteData = {
+          sourceUserId: userId,
+          sourceUserAccount: uni.getStorageSync('username') || '',
+          sourceOnePart: sourceOnePart,
+          acceptUserId: this.selectedOpponent.id,
+          acceptUserAccount: this.selectedOpponent.userName || '',
+          acceptOnePart: acceptOnePart,
+          inviteStatus: 0, // 0-待接受
+          timestamp: new Date().getTime() // 添加时间戳
+        };
+        
+        // 先清理旧的邀请，再发送新邀请
+        clearPendingInvitations(userId).then(() => {
+          // 发送邀请请求到后端
+          return addChessFriendPair(inviteData);
+        }).then(res => {
+          if (res.success) {
+            // 邀请发送成功
+            // 从响应中提取邀请ID - 优先使用对象中的id属性
+            let inviteId = null;
+            
+            if (res.result && typeof res.result === 'object' && res.result.id) {
+              // 如果result是对象且包含id属性
+              inviteId = res.result.id;
+              console.log('从result对象中获取inviteId:', inviteId);
+            } else if (typeof res.result === 'string' && res.result.match(/^[0-9]+$/)) {
+              // 如果result是纯数字字符串
+              inviteId = res.result;
+              console.log('从result字符串中获取inviteId:', inviteId);
+            } else {
+              // 无法获取有效ID，尝试查询最新邀请
+              console.error('无法从响应中获取有效的邀请ID:', res.result);
+              uni.showToast({
+                title: '邀请已发送，但无法获取邀请ID',
+                icon: 'none'
+              });
+              return;
+            }
+            
+            this.currentInviteId = inviteId;
+            console.log('当前邀请ID已设置为:', this.currentInviteId);
+            
+            // 显示匹配弹窗
+            this.showMatchingPopup = true;
+            this.$nextTick(() => {
+              this.$refs.matchingStatusPopup.open();
+            });
+            
+            // 开始轮询邀请状态
+            this.startPollingInviteStatus();
+            
+            // 通知父组件处理邀请
+            this.$emit('invite-friend', this.selectedOpponent, {
+              sourceOnePart,
+              acceptOnePart,
+              inviteId: this.currentInviteId
+            });
+          } else {
+            uni.showToast({
+              title: res.message || '邀请发送失败',
+              icon: 'none'
+            });
+          }
+        }).catch(err => {
+          console.error('发送邀请失败:', err);
+          uni.showToast({
+            title: '邀请发送失败，请稍后重试',
+            icon: 'none'
+          });
+        });
+      } else if (this.opponentSearchText) {
+        // 如果只输入了文本但没有从列表选中对手，提示用户
+        uni.showToast({
+          title: '请从列表中选择一个有效的对手',
+          icon: 'none'
+        });
+      } else {
+        // 没有选择对手，提示
+        uni.showToast({
+          title: '请先选择一个对手',
+          icon: 'none'
+        });
+      }
+    },
+    
+    // 开始轮询邀请状态
+    startPollingInviteStatus() {
+      if (!this.currentInviteId) return;
+      
+      // 清除可能的现有定时器
+      this.stopPollingInviteStatus();
+      
+      // 每3秒查询一次邀请状态
+      this.inviteStatusTimer = setInterval(() => {
+        this.queryInviteStatus();
+      }, 3000);
+      
+      // 立即执行一次
+      this.queryInviteStatus();
+    },
+    
+    // 停止轮询邀请状态
+    stopPollingInviteStatus() {
+      if (this.inviteStatusTimer) {
+        clearInterval(this.inviteStatusTimer);
+        this.inviteStatusTimer = null;
+      }
+    },
+    
+    // 查询邀请状态
+    queryInviteStatus() {
+      if (!this.currentInviteId) return;
+      
+      console.log('开始查询邀请状态，ID:', this.currentInviteId);
+      
+      // 确保ID是有效的数字
+      if (typeof this.currentInviteId !== 'string' || !this.currentInviteId.match(/^[0-9]+$/)) {
+        console.error('无效的邀请ID格式:', this.currentInviteId);
+        this.stopPollingInviteStatus();
+        return;
+      }
+      
+      getInvitationStatus(this.currentInviteId).then(res => {
+        console.log('邀请状态查询结果:', res);
+        if (res.success && res.result) {
+          // 更新邀请状态
+          this.inviteStatus = res.result.inviteStatus;
+          
+          // 根据状态处理
+          if (this.inviteStatus === 1) {
+            // 对方接受了邀请
+            this.stopPollingInviteStatus();
+            this.showMatchingPopup = false;
+            this.$refs.matchingStatusPopup?.close();
+            
+            // 通知父组件处理接受邀请
+            this.$emit('invite-accepted', {
+              inviteId: this.currentInviteId,
+              opponentId: this.selectedOpponent?.id || (this.selectedFriend?.id > 0 ? this.selectedFriend.id : 0)
+            });
+            
+            uni.showToast({
+              title: '对方接受了邀请，即将开始对局',
+              icon: 'none'
+            });
+          } else if (this.inviteStatus === 2) {
+            // 对方拒绝了邀请
+            this.stopPollingInviteStatus();
+            this.showMatchingPopup = false;
+            this.$refs.matchingStatusPopup?.close();
+            
+            uni.showToast({
+              title: '对方拒绝了邀请',
+              icon: 'none'
+            });
+          }
+          // 状态为0时继续等待
+        } else {
+          console.error('查询邀请状态失败:', res.message);
+          // 如果多次查询失败，尝试停止轮询
+          if (this.inviteStatusErrorCount === undefined) {
+            this.inviteStatusErrorCount = 1;
+          } else {
+            this.inviteStatusErrorCount++;
+          }
+          
+          // 连续失败3次后停止轮询
+          if (this.inviteStatusErrorCount >= 3) {
+            console.log('连续查询失败超过3次，停止轮询');
+            this.stopPollingInviteStatus();
+            uni.showToast({
+              title: '查询邀请状态失败，请重试',
+              icon: 'none'
+            });
+          }
+        }
+      }).catch(err => {
+        console.error('查询邀请状态失败:', err);
+      });
+    },
+    
+    // 取消邀请
+    handleCancelInvite(inviteId) {
+      console.log('取消邀请:', inviteId || this.currentInviteId);
+      
+      // 优先使用传入的inviteId，否则使用当前保存的ID
+      const id = inviteId || this.currentInviteId;
+      
+      if (!id) {
+        console.error('没有有效的邀请ID，无法取消邀请');
+        return;
+      }
+      
+      cancelInvitation(id).then(res => {
+        console.log('取消邀请结果:', res);
+        if (res.success) {
+          // 停止轮询
+          this.stopPollingInviteStatus();
+          this.showMatchingPopup = false;
+          this.$refs.matchingStatusPopup?.close();
+          
+          uni.showToast({
+            title: '已取消邀请',
+            icon: 'none'
+          });
+          
+          // 通知父组件
+          this.$emit('cancel-matching');
+        } else {
+          uni.showToast({
+            title: res.message || '取消邀请失败',
+            icon: 'none'
+          });
+        }
+      }).catch(err => {
+        console.error('取消邀请失败:', err);
+        uni.showToast({
+          title: '操作失败，请稍后重试',
+          icon: 'none'
+        });
+      });
     },
     
     onCancelMatching() {
+      // 如果有邀请ID，先尝试取消邀请
+      if (this.currentInviteId) {
+        this.handleCancelInvite();
+      } else {
       this.$emit('cancel-matching');
+      }
     },
     
     showModeSelector() {
@@ -327,9 +636,94 @@ export default {
     // 处理邀请好友
     onInviteFriend() {
       console.log('邀请用户', this.selectedFriend);
-      // 发送邀请，显示匹配中状态
+      
+      // 获取当前用户ID
+      const userId = uni.getStorageSync('userId') || '';
+      if (!userId) {
+        uni.showToast({
+          title: '用户未登录，无法发送邀请',
+          icon: 'none'
+        });
+        return;
+      }
+      
+      // 确定发起方执棋颜色
+      const sourceOnePart = this.playAs === 'black' ? 1 : (this.playAs === 'white' ? 2 : (Math.random() < 0.5 ? 1 : 2));
+      // 设置接受方执棋颜色（与发起方相反）
+      const acceptOnePart = sourceOnePart === 1 ? 2 : 1;
+      
+      // 添加时间戳，避免邀请数据重复
+      const inviteData = {
+        sourceUserId: userId,
+        sourceUserAccount: uni.getStorageSync('username') || '',
+        sourceOnePart: sourceOnePart,
+        acceptUserId: this.selectedFriend.id,
+        acceptUserAccount: this.selectedFriend.userName || this.selectedFriend.name || '',
+        acceptOnePart: acceptOnePart,
+        inviteStatus: 0, // 0-待接受
+        timestamp: new Date().getTime() // 添加时间戳
+      };
+      
+      // 先清理旧的邀请，再发送新邀请
+      clearPendingInvitations(userId).then(() => {
+        // 发送邀请请求到后端
+        return addChessFriendPair(inviteData);
+      }).then(res => {
+        if (res.success) {
+          // 发送邀请成功
+          // 从响应中提取邀请ID - 优先使用对象中的id属性
+          let inviteId = null;
+          
+          if (res.result && typeof res.result === 'object' && res.result.id) {
+            // 如果result是对象且包含id属性
+            inviteId = res.result.id;
+            console.log('从result对象中获取inviteId:', inviteId);
+          } else if (typeof res.result === 'string' && res.result.match(/^[0-9]+$/)) {
+            // 如果result是纯数字字符串
+            inviteId = res.result;
+            console.log('从result字符串中获取inviteId:', inviteId);
+          } else {
+            // 无法获取有效ID，尝试查询最新邀请
+            console.error('无法从响应中获取有效的邀请ID:', res.result);
+            uni.showToast({
+              title: '邀请已发送，但无法获取邀请ID',
+              icon: 'none'
+            });
+            return;
+          }
+          
+          this.currentInviteId = inviteId;
+          console.log('当前邀请ID已设置为:', this.currentInviteId);
+          
+          // 显示匹配弹窗
       this.showFriendGameSettings = false;
-      this.$emit('invite-friend', this.selectedFriend);
+          this.showMatchingPopup = true;
+          this.$nextTick(() => {
+            this.$refs.matchingStatusPopup.open();
+          });
+          
+          // 开始轮询邀请状态
+          this.startPollingInviteStatus();
+          
+          // 通知父组件处理邀请
+          this.$emit('invite-friend', this.selectedFriend, {
+            sourceOnePart: sourceOnePart,
+            acceptOnePart: acceptOnePart,
+            inviteId: this.currentInviteId
+          });
+        } else {
+          uni.showToast({
+            title: res.message || '发送邀请失败',
+            icon: 'none'
+          });
+        }
+      }).catch(err => {
+        console.error('发送邀请失败', err);
+        uni.showToast({
+          title: '发送邀请失败，请稍后重试',
+          icon: 'none'
+        });
+      });
     },
     
     // 处理链接邀请
@@ -345,6 +739,132 @@ export default {
     
     onPlayLadder() {
       this.$emit('play-ladder');
+    },
+    
+    // 处理匹配弹窗关闭
+    handleMatchingPopupClose() {
+      this.showMatchingPopup = false;
+    },
+    
+    // 获取对手列表
+    fetchOpponentsList() {
+      this.loading = true;
+      getOpponentsList({
+        pageNo: 1,
+        pageSize: 20
+      }).then(res => {
+        console.log('获取对手列表响应:', res);
+        if (res.success && res.result) {
+          // 直接使用result数组，而不是寻找result.records
+          this.opponentsList = Array.isArray(res.result) ? res.result : [];
+          console.log('对手列表处理后数据:', this.opponentsList);
+          
+          // 如果遇到数据结构问题，尝试转换数据
+          if (this.opponentsList.length > 0 && !this.opponentsList[0].userName) {
+            this.opponentsList = this.opponentsList.map(item => ({
+              id: item.id,
+              userName: item.userName || item.username || '',
+              rating: item.rating || 0,
+              avatar: item.avatar || '/static/images/match/avatar-default.png'
+            }));
+            console.log('对手列表数据转换后:', this.opponentsList);
+          }
+        } else {
+          const errorMsg = res.message || '获取对手列表失败';
+          console.error('获取对手列表失败:', errorMsg);
+          uni.showToast({
+            title: errorMsg,
+            icon: 'none',
+            duration: 2000
+          });
+        }
+      }).catch(err => {
+        console.error('获取对手列表请求异常:', err);
+        uni.showToast({
+          title: '网络请求异常，请检查网络连接',
+          icon: 'none',
+          duration: 2000
+        });
+      }).finally(() => {
+        this.loading = false;
+      });
+    },
+    
+    // 选择对手
+    selectOpponent(opponent) {
+      console.log('选择对手:', opponent);
+      
+      // 确保对手数据格式一致
+      this.selectedOpponent = {
+        id: opponent.id,
+        userName: opponent.userName || opponent.username || '未知用户',
+        rating: opponent.rating || 0,
+        avatar: opponent.avatar || '/static/images/match/avatar-default.png'
+      };
+      
+      this.opponentSearchText = this.selectedOpponent.userName;
+      this.showOpponentDropdown = false;
+      
+      // 显示选择成功提示
+      uni.showToast({
+        title: `已选择对手: ${this.selectedOpponent.userName}`,
+        icon: 'none',
+        duration: 1500
+      });
+    },
+    
+    // 搜索对手
+    onOpponentInputFocus() {
+      if (!this.opponentsList.length) {
+        this.fetchOpponentsList();
+      }
+      this.showOpponentDropdown = true;
+    },
+    
+    // 过滤对手列表
+    filteredOpponents() {
+      // 调试输出
+      console.log('过滤前的对手列表:', this.opponentsList);
+      
+      if (!this.opponentSearchText) {
+        return this.opponentsList;
+      }
+      
+      const searchText = this.opponentSearchText.toLowerCase();
+      // 更灵活地处理各种可能的字段名
+      const filtered = this.opponentsList.filter(item => {
+        // 尝试多种可能的字段名
+        const userName = item.userName || item.username || '';
+        const result = userName.toLowerCase().includes(searchText);
+        console.log(`对手 ${JSON.stringify(item)} 是否匹配 "${searchText}": ${result}`);
+        return result;
+      });
+      
+      console.log('过滤后的对手列表:', filtered);
+      return filtered;
+    },
+    
+    // 点击外部区域关闭下拉框
+    closeDropdown() {
+      this.showOpponentDropdown = false;
+    }
+  },
+  mounted() {
+    // 只有在展开更多选项时才初始化加载对手列表
+    if (this.showMoreOptions) {
+      this.fetchOpponentsList();
+    }
+  },
+  beforeDestroy() {
+    // 清除定时器
+    this.stopPollingInviteStatus();
+  },
+  watch: {
+    // 监听showMoreOptions变化，在展开更多选项时加载对手列表
+    showMoreOptions(newVal) {
+      if (newVal && this.opponentsList.length === 0) {
+        this.fetchOpponentsList();
+      }
     }
   }
 }
@@ -506,27 +1026,81 @@ export default {
 }
 
 // 指定对手
-.option-section {
-  margin: 20rpx auto;
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 10rpx;
-  padding: 20rpx;
-  width: 95%;
-  align-items: center;
-  box-shadow: 0 2rpx 10rpx rgba(255, 255, 255, 0.1);
+.opponent-selector {
+  position: relative;
+  width: 100%;
+}
   
   .opponent-input {
     width: 100%;
     color: #EEEEEE !important;
     background-color: transparent;
-    padding: 10rpx;
+  padding: 10rpx 60rpx 10rpx 10rpx;
     font-weight: bold;
     font-size: 32rpx;
-    
-    &::placeholder {
-      color: rgba(255,255,255,0.5);
+}
+
+.dropdown-icon {
+  position: absolute;
+  right: 10rpx;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+.opponent-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: #2a2a2a;
+  border-radius: 0 0 10rpx 10rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.3);
+  z-index: 10;
+  max-height: 300rpx;
+  overflow-y: auto;
+}
+
+.opponent-item {
+  display: flex;
+  align-items: center;
+  padding: 20rpx;
+  border-bottom: 1px solid #3a3a3a;
+}
+
+.opponent-item:active {
+  background-color: #3a3a3a;
+}
+
+.opponent-avatar {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 50%;
+  margin-right: 20rpx;
+}
+
+.opponent-info {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
     }
-  }
+
+.opponent-name {
+  font-size: 28rpx;
+  color: #EEEEEE;
+}
+
+.opponent-rating {
+  font-size: 24rpx;
+  color: #AAAAAA;
+  margin-left: 10rpx;
+}
+
+.loading-item, .no-data-item {
+  padding: 20rpx;
+  text-align: center;
+  color: #AAAAAA;
+  font-size: 28rpx;
 }
 
 // 时间选择模块
@@ -748,5 +1322,16 @@ export default {
       color: #FFFFFF;
     }
   }
+}
+
+// 添加回被删除的option-section样式
+.option-section {
+  margin: 20rpx auto;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 10rpx;
+  padding: 20rpx;
+  width: 95%;
+  align-items: center;
+  box-shadow: 0 2rpx 10rpx rgba(255, 255, 255, 0.1);
 }
 </style>

@@ -44,7 +44,7 @@
         >
           <image class="user-avatar" :src="user.avatar" mode="aspectFit"></image>
           <view class="user-info">
-            <text class="user-name">{{ user.name }}</text>
+            <text class="user-name">{{ user.userName }}</text>
             <text class="user-rating">({{ user.rating }})</text>
           </view>
           <image v-if="user.badge" class="user-badge" :src="user.badge" mode="aspectFit"></image>
@@ -73,21 +73,21 @@ export default {
       searchResults: [
         {
           id: 1,
-          name: 'ChessPlayer522009',
+          userName: 'ChessPlayer522009',
           rating: 2534,
           avatar: '/static/images/match/avatar-default.png',
           badge: '/static/images/match/badge-red.png'
         },
         {
           id: 2,
-          name: 'riishadawda',
+          userName: 'riishadawda',
           rating: 827,
           avatar: '/static/images/match/avatar-default.png',
           badge: ''
         },
         {
           id: 3,
-          name: 'DawDawMLG',
+          userName: 'DawDawMLG',
           rating: 679,
           avatar:'/static/images/match/avatar-default.png',
           badge: ''
@@ -110,7 +110,7 @@ export default {
     
     // 邀请好友
     inviteFriend(user) {
-      console.log('选择好友:', user.name);
+      console.log('选择好友:', user.userName);
       this.$emit('select-friend', user);
     },
     

@@ -153,7 +153,7 @@
       .form-title {
         font-size: 42rpx;
         font-weight: bold;
-        color: #EEE3;
+        color: #EEE;
         margin-bottom: 40rpx;
         text-align: center;
       }

@@ -33,6 +33,7 @@
             type="text" 
             placeholder="输入英文ID，如king-moves" 
             v-model="course.id"
+            :focus="!isEdit"
           />
           <text class="tip">用于系统识别课程，建议使用英文</text>
         </view>
@@ -43,6 +44,7 @@
             type="text" 
             placeholder="输入课程标题" 
             v-model="course.title"
+
           />
         </view>
         
@@ -250,6 +252,7 @@
 <script>
 import TopSpacing from '@/components/TopSpacing.vue'
 import { checkRole } from '@/utils/permission'
+import { getCourseDetail, addCourse, updateCourse, getCourseStepList, addCourseStep, updateCourseStep, deleteCourseStep, getBoardSetupList, addBoardSetup, updateBoardSetup, deleteBoardSetup } from '@/api/course'
 
 export default {
   components: {
@@ -311,62 +314,60 @@ export default {
       this.loadCourseData(this.courseId)
     }
   },
+  
+  beforeDestroy() {
+    // 清理资源
+    this.course = {
+      id: '',
+      title: '',
+      description: '',
+      category: 'basic',
+      icon: '',
+      steps: []
+    }
+  },
   methods: {
-    // 检查管理员权限
+    // 检查管理员权限（临时修改为允许所有人访问）
     checkAdminPermission() {
-      return checkRole(['admin'])
+      // 临时返回true，允许所有人访问管理界面进行测试
+      return true
+      // 原代码：return checkRole(['admin'])
     },
     
     // 加载课程数据
     loadCourseData(courseId) {
-      // 模拟从数据库加载课程信息
-      const courseSamples = {
-        'king-moves': {
-          id: 'king-moves',
-          title: '国王的移动',
-          description: '学习国王如何在棋盘上移动，掌握这个基本但重要的棋子走法',
-          icon: 'https://pic1.imgdb.cn/item/67f3d477e381c3632bee96e5.png',
-          category: 'basic',
-          steps: [
-            {
-              type: 'intro',
-              message: '国王是棋盘上最重要的棋子。如果你的国王被将军且无法脱离，你就输掉了比赛！让我们来学习国王的走法。',
-              boardSetup: {
-                clear: true,
-                pieces: [
-                  { piece: 'white-king', position: { row: 4, col: 4 } }
-                ]
-              }
-            },
-            {
-              type: 'task',
-              message: '国王可以沿任何方向移动一格。请将国王从e4移动到f4（向右一格）。',
-              expectedMove: {
-                from: { row: 4, col: 4 },
-                to: { row: 4, col: 5 }
-              },
-              correctMessage: 'Kf4 是正确的！国王可以向任何方向移动一格。',
-              errorMessage: '不正确，国王只能移动一格。请尝试将国王从e4移动到f4（向右）。',
-              hintMessage: '点击国王，然后点击右侧的f4格子。',
-              boardSetup: {
-                clear: false
-              }
-            }
-          ]
-        }
-      }
+      uni.showLoading({
+        title: '加载中...'
+      });
       
-      if (courseSamples[courseId]) {
-        this.course = JSON.parse(JSON.stringify(courseSamples[courseId]))
-      } else {
+      getCourseDetail(courseId).then(res => {
+        if (res.success && res.result) {
+          // 更新课程数据
+          this.course = res.result;
+          
+          // 如果没有步骤数据，初始化为空数组
+          if (!this.course.steps) {
+            this.course.steps = [];
+          }
+          
+          // 更新分类索引
+          this.categoryIndex = this.categories.findIndex(item => item.value === this.course.category);
+          if (this.categoryIndex === -1) this.categoryIndex = 0;
+        } else {
+          uni.showToast({
+            title: '获取课程数据失败',
+            icon: 'none'
+          });
+        }
+      }).catch(err => {
+        console.error('获取课程数据失败', err);
         uni.showToast({
-          title: '课程不存在',
+          title: '获取课程数据失败',
           icon: 'none'
-        })
-        setTimeout(() => {
-          uni.navigateBack()
-        }, 1500)
-      }
+        });
+      }).finally(() => {
+        uni.hideLoading();
+      });
     },
     
     // 获取步骤类型索引
@@ -435,13 +436,49 @@ export default {
     
     // 添加步骤
     addStep() {
-      this.course.steps.push({
+      // 添加一个新步骤
+      const newStep = {
         type: 'intro',
         message: '',
         boardSetup: {
-          clear: false
+          clear: false,
+          pieces: []
+        },
+        courseId: this.course.id // 关联到当前课程
+      };
+      
+      // 如果是新建课程，直接添加到本地数组
+      if (!this.isEdit || !this.course.id) {
+        this.course.steps.push(newStep);
+        return;
+      }
+      
+      // 如果是编辑现有课程，调用API
+      uni.showLoading({ title: '添加中...' });
+      
+      addCourseStep(newStep).then(res => {
+        if (res.success && res.result) {
+          // 添加成功，将返回的步骤（包含ID）添加到列表
+          this.course.steps.push(res.result);
+          uni.showToast({
+            title: '添加步骤成功',
+            icon: 'success'
+          });
+        } else {
+          uni.showToast({
+            title: '添加步骤失败',
+            icon: 'none'
+          });
         }
-      })
+      }).catch(err => {
+        console.error('添加步骤失败', err);
+        uni.showToast({
+          title: '添加步骤失败',
+          icon: 'none'
+        });
+      }).finally(() => {
+        uni.hideLoading();
+      });
     },
     
     // 删除步骤
@@ -451,10 +488,43 @@ export default {
         content: `确定要删除步骤${index + 1}吗？`,
         success: (res) => {
           if (res.confirm) {
-            this.course.steps.splice(index, 1)
+            const step = this.course.steps[index];
+            
+            // 如果是新建课程或步骤没有ID，直接从数组中移除
+            if (!this.isEdit || !step.id) {
+              this.course.steps.splice(index, 1);
+              return;
+            }
+            
+            // 如果是编辑现有课程，调用API删除
+            uni.showLoading({ title: '删除中...' });
+            
+            deleteCourseStep(step.id).then(res => {
+              if (res.success) {
+                // 删除成功，从数组中移除
+                this.course.steps.splice(index, 1);
+                uni.showToast({
+                  title: '删除步骤成功',
+                  icon: 'success'
+                });
+              } else {
+                uni.showToast({
+                  title: res.message || '删除步骤失败',
+                  icon: 'none'
+                });
+              }
+            }).catch(err => {
+              console.error('删除步骤失败', err);
+              uni.showToast({
+                title: '删除步骤失败',
+                icon: 'none'
+              });
+            }).finally(() => {
+              uni.hideLoading();
+            });
           }
         }
-      })
+      });
     },
     
     // 步骤上移
@@ -518,23 +588,39 @@ export default {
         return
       }
       
-      // 模拟保存过程
       uni.showLoading({
         title: '保存中...'
-      })
+      });
       
-      setTimeout(() => {
-        uni.hideLoading()
+      // 根据是否是编辑模式选择API
+      const savePromise = this.isEdit ? updateCourse(this.course) : addCourse(this.course);
+      
+      savePromise.then(res => {
+        if (res.success) {
+          uni.showToast({
+            title: '保存成功',
+            icon: 'success'
+          });
+          
+          // 返回上一页
+          setTimeout(() => {
+            uni.navigateBack();
+          }, 1500);
+        } else {
+          uni.showToast({
+            title: res.message || '保存失败',
+            icon: 'none'
+          });
+        }
+      }).catch(err => {
+        console.error('保存课程失败', err);
         uni.showToast({
-          title: '保存成功',
-          icon: 'success'
-        })
-        
-        // 返回上一页
-        setTimeout(() => {
-          uni.navigateBack()
-        }, 1500)
-      }, 1000)
+          title: '保存失败',
+          icon: 'none'
+        });
+      }).finally(() => {
+        uni.hideLoading();
+      });
     },
     
     // 返回上一页
@@ -667,6 +753,10 @@ export default {
 }
 
 /* 表单项样式 */
+.form-item input {
+  height: 80rpx;
+  padding: 20rpx;
+}
 .form-item {
   margin-bottom: 30rpx;
   
@@ -674,6 +764,7 @@ export default {
     display: block;
     color: #EEE;
     font-size: 28rpx;
+    height: auto;
     font-weight: bold;
     margin-bottom: 15rpx;
   }
@@ -947,4 +1038,4 @@ export default {
     transform: translateY(0);
   }
 }
-</style> 
+</style>

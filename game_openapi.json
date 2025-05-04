@@ -5,1648 +5,6 @@
     "version" : "1.0"
   },
   "paths" : {
-    "/score/chessPlayerScore/list" : {
-      "get" : {
-        "summary" : "游戏选手积分-分页列表查询",
-        "description" : "游戏选手积分-分页列表查询",
-        "parameters" : [ {
-          "name" : "id",
-          "in" : "query",
-          "description" : "id",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "userId",
-          "in" : "query",
-          "description" : "用户id",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "userAccount",
-          "in" : "query",
-          "description" : "用户账号",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "score",
-          "in" : "query",
-          "description" : "得分，初始值600",
-          "required" : false,
-          "schema" : {
-            "type" : "integer",
-            "nullable" : false
-          }
-        }, {
-          "name" : "createBy",
-          "in" : "query",
-          "description" : "创建人",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "createTime",
-          "in" : "query",
-          "description" : "创建日期",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "updateBy",
-          "in" : "query",
-          "description" : "更新人",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "updateTime",
-          "in" : "query",
-          "description" : "更新日期",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "sysOrgCode",
-          "in" : "query",
-          "description" : "所属部门",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "delFlag",
-          "in" : "query",
-          "description" : "删除状态",
-          "required" : false,
-          "schema" : {
-            "type" : "integer",
-            "nullable" : false
-          }
-        }, {
-          "name" : "pageNo",
-          "in" : "query",
-          "description" : "",
-          "required" : true,
-          "schema" : {
-            "type" : "integer",
-            "nullable" : false,
-            "default" : "1"
-          }
-        }, {
-          "name" : "pageSize",
-          "in" : "query",
-          "description" : "",
-          "required" : true,
-          "schema" : {
-            "type" : "integer",
-            "nullable" : false,
-            "default" : "10"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/score/chessPlayerScore/add" : {
-      "post" : {
-        "summary" : "游戏选手积分-添加",
-        "description" : "游戏选手积分-添加",
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "type" : "object",
-                "properties" : {
-                  "id" : {
-                    "type" : "string",
-                    "description" : "id"
-                  },
-                  "userId" : {
-                    "type" : "string",
-                    "description" : "用户id"
-                  },
-                  "userAccount" : {
-                    "type" : "string",
-                    "description" : "用户账号"
-                  },
-                  "score" : {
-                    "type" : "integer",
-                    "description" : "得分，初始值600"
-                  },
-                  "createBy" : {
-                    "type" : "string",
-                    "description" : "创建人"
-                  },
-                  "createTime" : {
-                    "type" : "string",
-                    "description" : "创建日期"
-                  },
-                  "updateBy" : {
-                    "type" : "string",
-                    "description" : "更新人"
-                  },
-                  "updateTime" : {
-                    "type" : "string",
-                    "description" : "更新日期"
-                  },
-                  "sysOrgCode" : {
-                    "type" : "string",
-                    "description" : "所属部门"
-                  },
-                  "delFlag" : {
-                    "type" : "integer",
-                    "description" : "删除状态"
-                  }
-                },
-                "description" : ""
-              }
-            }
-          }
-        },
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/score/chessPlayerScore/edit" : {
-      "put" : {
-        "summary" : "游戏选手积分-编辑",
-        "description" : "游戏选手积分-编辑",
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "type" : "object",
-                "properties" : {
-                  "id" : {
-                    "type" : "string",
-                    "description" : "id"
-                  },
-                  "userId" : {
-                    "type" : "string",
-                    "description" : "用户id"
-                  },
-                  "userAccount" : {
-                    "type" : "string",
-                    "description" : "用户账号"
-                  },
-                  "score" : {
-                    "type" : "integer",
-                    "description" : "得分，初始值600"
-                  },
-                  "createBy" : {
-                    "type" : "string",
-                    "description" : "创建人"
-                  },
-                  "createTime" : {
-                    "type" : "string",
-                    "description" : "创建日期"
-                  },
-                  "updateBy" : {
-                    "type" : "string",
-                    "description" : "更新人"
-                  },
-                  "updateTime" : {
-                    "type" : "string",
-                    "description" : "更新日期"
-                  },
-                  "sysOrgCode" : {
-                    "type" : "string",
-                    "description" : "所属部门"
-                  },
-                  "delFlag" : {
-                    "type" : "integer",
-                    "description" : "删除状态"
-                  }
-                },
-                "description" : ""
-              }
-            }
-          }
-        },
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/score/chessPlayerScore/delete" : {
-      "delete" : {
-        "summary" : "游戏选手积分-通过id删除",
-        "description" : "游戏选手积分-通过id删除",
-        "parameters" : [ {
-          "name" : "id",
-          "in" : "query",
-          "description" : "",
-          "required" : true,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/score/chessPlayerScore/deleteBatch" : {
-      "delete" : {
-        "summary" : "游戏选手积分-批量删除",
-        "description" : "游戏选手积分-批量删除",
-        "parameters" : [ {
-          "name" : "ids",
-          "in" : "query",
-          "description" : "",
-          "required" : true,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/score/chessPlayerScore/queryById" : {
-      "get" : {
-        "summary" : "游戏选手积分-通过id查询",
-        "description" : "游戏选手积分-通过id查询",
-        "parameters" : [ {
-          "name" : "id",
-          "in" : "query",
-          "description" : "",
-          "required" : true,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/score/chessPlayerScoreRecord/list" : {
-      "get" : {
-        "summary" : "游戏选手得分记录-分页列表查询",
-        "description" : "游戏选手得分记录-分页列表查询",
-        "parameters" : [ {
-          "name" : "id",
-          "in" : "query",
-          "description" : "id",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "chessPlayerId",
-          "in" : "query",
-          "description" : "游戏选手id",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "chessGameId",
-          "in" : "query",
-          "description" : "游戏id",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "score",
-          "in" : "query",
-          "description" : "得分，>0为获取，<0为失去",
-          "required" : false,
-          "schema" : {
-            "type" : "integer",
-            "nullable" : false
-          }
-        }, {
-          "name" : "createBy",
-          "in" : "query",
-          "description" : "创建人",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "createTime",
-          "in" : "query",
-          "description" : "创建日期",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "updateBy",
-          "in" : "query",
-          "description" : "更新人",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "updateTime",
-          "in" : "query",
-          "description" : "更新日期",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "sysOrgCode",
-          "in" : "query",
-          "description" : "所属部门",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "delFlag",
-          "in" : "query",
-          "description" : "删除状态",
-          "required" : false,
-          "schema" : {
-            "type" : "integer",
-            "nullable" : false
-          }
-        }, {
-          "name" : "pageNo",
-          "in" : "query",
-          "description" : "",
-          "required" : true,
-          "schema" : {
-            "type" : "integer",
-            "nullable" : false,
-            "default" : "1"
-          }
-        }, {
-          "name" : "pageSize",
-          "in" : "query",
-          "description" : "",
-          "required" : true,
-          "schema" : {
-            "type" : "integer",
-            "nullable" : false,
-            "default" : "10"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/score/chessPlayerScoreRecord/add" : {
-      "post" : {
-        "summary" : "游戏选手得分记录-添加",
-        "description" : "游戏选手得分记录-添加",
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "type" : "object",
-                "properties" : {
-                  "id" : {
-                    "type" : "string",
-                    "description" : "id"
-                  },
-                  "chessPlayerId" : {
-                    "type" : "string",
-                    "description" : "游戏选手id"
-                  },
-                  "chessGameId" : {
-                    "type" : "string",
-                    "description" : "游戏id"
-                  },
-                  "score" : {
-                    "type" : "integer",
-                    "description" : "得分，>0为获取，<0为失去"
-                  },
-                  "createBy" : {
-                    "type" : "string",
-                    "description" : "创建人"
-                  },
-                  "createTime" : {
-                    "type" : "string",
-                    "description" : "创建日期"
-                  },
-                  "updateBy" : {
-                    "type" : "string",
-                    "description" : "更新人"
-                  },
-                  "updateTime" : {
-                    "type" : "string",
-                    "description" : "更新日期"
-                  },
-                  "sysOrgCode" : {
-                    "type" : "string",
-                    "description" : "所属部门"
-                  },
-                  "delFlag" : {
-                    "type" : "integer",
-                    "description" : "删除状态"
-                  }
-                },
-                "description" : ""
-              }
-            }
-          }
-        },
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/score/chessPlayerScoreRecord/edit" : {
-      "put" : {
-        "summary" : "游戏选手得分记录-编辑",
-        "description" : "游戏选手得分记录-编辑",
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "type" : "object",
-                "properties" : {
-                  "id" : {
-                    "type" : "string",
-                    "description" : "id"
-                  },
-                  "chessPlayerId" : {
-                    "type" : "string",
-                    "description" : "游戏选手id"
-                  },
-                  "chessGameId" : {
-                    "type" : "string",
-                    "description" : "游戏id"
-                  },
-                  "score" : {
-                    "type" : "integer",
-                    "description" : "得分，>0为获取，<0为失去"
-                  },
-                  "createBy" : {
-                    "type" : "string",
-                    "description" : "创建人"
-                  },
-                  "createTime" : {
-                    "type" : "string",
-                    "description" : "创建日期"
-                  },
-                  "updateBy" : {
-                    "type" : "string",
-                    "description" : "更新人"
-                  },
-                  "updateTime" : {
-                    "type" : "string",
-                    "description" : "更新日期"
-                  },
-                  "sysOrgCode" : {
-                    "type" : "string",
-                    "description" : "所属部门"
-                  },
-                  "delFlag" : {
-                    "type" : "integer",
-                    "description" : "删除状态"
-                  }
-                },
-                "description" : ""
-              }
-            }
-          }
-        },
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/score/chessPlayerScoreRecord/delete" : {
-      "delete" : {
-        "summary" : "游戏选手得分记录-通过id删除",
-        "description" : "游戏选手得分记录-通过id删除",
-        "parameters" : [ {
-          "name" : "id",
-          "in" : "query",
-          "description" : "",
-          "required" : true,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/score/chessPlayerScoreRecord/deleteBatch" : {
-      "delete" : {
-        "summary" : "游戏选手得分记录-批量删除",
-        "description" : "游戏选手得分记录-批量删除",
-        "parameters" : [ {
-          "name" : "ids",
-          "in" : "query",
-          "description" : "",
-          "required" : true,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/score/chessPlayerScoreRecord/queryById" : {
-      "get" : {
-        "summary" : "游戏选手得分记录-通过id查询",
-        "description" : "游戏选手得分记录-通过id查询",
-        "parameters" : [ {
-          "name" : "id",
-          "in" : "query",
-          "description" : "",
-          "required" : true,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pair/chooselist" : {
-      "post" : {
-        "summary" : "获取所有可选队友数据列表",
-        "description" : "获取所有可选队友数据列表",
-        "parameters" : [ {
-          "name" : "pageNo",
-          "in" : "query",
-          "description" : "",
-          "required" : true,
-          "schema" : {
-            "type" : "integer",
-            "nullable" : false,
-            "default" : "1"
-          }
-        }, {
-          "name" : "pageSize",
-          "in" : "query",
-          "description" : "",
-          "required" : true,
-          "schema" : {
-            "type" : "integer",
-            "nullable" : false,
-            "default" : "10"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pair/chessFriendPair/list" : {
-      "get" : {
-        "summary" : "对弈关系-分页列表查询",
-        "description" : "对弈关系-分页列表查询",
-        "parameters" : [ {
-          "name" : "id",
-          "in" : "query",
-          "description" : "id",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "sourceUserId",
-          "in" : "query",
-          "description" : "发起用户id",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "sourceUserAccount",
-          "in" : "query",
-          "description" : "发起用户账号",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "sourceOnePart",
-          "in" : "query",
-          "description" : "1：黑色；2: 白色",
-          "required" : false,
-          "schema" : {
-            "type" : "integer",
-            "nullable" : false
-          }
-        }, {
-          "name" : "acceptUserId",
-          "in" : "query",
-          "description" : "接受用户id",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "acceptUserAccount",
-          "in" : "query",
-          "description" : "接受用户账号",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "acceptOnePart",
-          "in" : "query",
-          "description" : "1：黑色；2: 白色",
-          "required" : false,
-          "schema" : {
-            "type" : "integer",
-            "nullable" : false
-          }
-        }, {
-          "name" : "createBy",
-          "in" : "query",
-          "description" : "创建人",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "createTime",
-          "in" : "query",
-          "description" : "创建日期",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "updateBy",
-          "in" : "query",
-          "description" : "更新人",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "updateTime",
-          "in" : "query",
-          "description" : "更新日期",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "sysOrgCode",
-          "in" : "query",
-          "description" : "所属部门",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        }, {
-          "name" : "delFlag",
-          "in" : "query",
-          "description" : "删除状态",
-          "required" : false,
-          "schema" : {
-            "type" : "integer",
-            "nullable" : false
-          }
-        }, {
-          "name" : "pageNo",
-          "in" : "query",
-          "description" : "",
-          "required" : true,
-          "schema" : {
-            "type" : "integer",
-            "nullable" : false,
-            "default" : "1"
-          }
-        }, {
-          "name" : "pageSize",
-          "in" : "query",
-          "description" : "",
-          "required" : true,
-          "schema" : {
-            "type" : "integer",
-            "nullable" : false,
-            "default" : "10"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pair/chessFriendPair/add" : {
-      "post" : {
-        "summary" : "对弈关系-添加",
-        "description" : "对弈关系-添加",
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "type" : "object",
-                "properties" : {
-                  "id" : {
-                    "type" : "string",
-                    "description" : "id"
-                  },
-                  "sourceUserId" : {
-                    "type" : "string",
-                    "description" : "发起用户id"
-                  },
-                  "sourceUserAccount" : {
-                    "type" : "string",
-                    "description" : "发起用户账号"
-                  },
-                  "sourceOnePart" : {
-                    "type" : "integer",
-                    "description" : "1：黑色；2: 白色"
-                  },
-                  "acceptUserId" : {
-                    "type" : "string",
-                    "description" : "接受用户id"
-                  },
-                  "acceptUserAccount" : {
-                    "type" : "string",
-                    "description" : "接受用户账号"
-                  },
-                  "acceptOnePart" : {
-                    "type" : "integer",
-                    "description" : "1：黑色；2: 白色"
-                  },
-                  "createBy" : {
-                    "type" : "string",
-                    "description" : "创建人"
-                  },
-                  "createTime" : {
-                    "type" : "string",
-                    "description" : "创建日期"
-                  },
-                  "updateBy" : {
-                    "type" : "string",
-                    "description" : "更新人"
-                  },
-                  "updateTime" : {
-                    "type" : "string",
-                    "description" : "更新日期"
-                  },
-                  "sysOrgCode" : {
-                    "type" : "string",
-                    "description" : "所属部门"
-                  },
-                  "delFlag" : {
-                    "type" : "integer",
-                    "description" : "删除状态"
-                  }
-                },
-                "description" : ""
-              }
-            }
-          }
-        },
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pair/chessFriendPair/edit" : {
-      "put" : {
-        "summary" : "对弈关系-编辑",
-        "description" : "对弈关系-编辑",
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "type" : "object",
-                "properties" : {
-                  "id" : {
-                    "type" : "string",
-                    "description" : "id"
-                  },
-                  "sourceUserId" : {
-                    "type" : "string",
-                    "description" : "发起用户id"
-                  },
-                  "sourceUserAccount" : {
-                    "type" : "string",
-                    "description" : "发起用户账号"
-                  },
-                  "sourceOnePart" : {
-                    "type" : "integer",
-                    "description" : "1：黑色；2: 白色"
-                  },
-                  "acceptUserId" : {
-                    "type" : "string",
-                    "description" : "接受用户id"
-                  },
-                  "acceptUserAccount" : {
-                    "type" : "string",
-                    "description" : "接受用户账号"
-                  },
-                  "acceptOnePart" : {
-                    "type" : "integer",
-                    "description" : "1：黑色；2: 白色"
-                  },
-                  "createBy" : {
-                    "type" : "string",
-                    "description" : "创建人"
-                  },
-                  "createTime" : {
-                    "type" : "string",
-                    "description" : "创建日期"
-                  },
-                  "updateBy" : {
-                    "type" : "string",
-                    "description" : "更新人"
-                  },
-                  "updateTime" : {
-                    "type" : "string",
-                    "description" : "更新日期"
-                  },
-                  "sysOrgCode" : {
-                    "type" : "string",
-                    "description" : "所属部门"
-                  },
-                  "delFlag" : {
-                    "type" : "integer",
-                    "description" : "删除状态"
-                  }
-                },
-                "description" : ""
-              }
-            }
-          }
-        },
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pair/chessFriendPair/delete" : {
-      "delete" : {
-        "summary" : "对弈关系-通过id删除",
-        "description" : "对弈关系-通过id删除",
-        "parameters" : [ {
-          "name" : "id",
-          "in" : "query",
-          "description" : "",
-          "required" : true,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pair/chessFriendPair/deleteBatch" : {
-      "delete" : {
-        "summary" : "对弈关系-批量删除",
-        "description" : "对弈关系-批量删除",
-        "parameters" : [ {
-          "name" : "ids",
-          "in" : "query",
-          "description" : "",
-          "required" : true,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pair/chessFriendPair/queryById" : {
-      "get" : {
-        "summary" : "对弈关系-通过id查询",
-        "description" : "对弈关系-通过id查询",
-        "parameters" : [ {
-          "name" : "id",
-          "in" : "query",
-          "description" : "",
-          "required" : true,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "success" : {
-                      "type" : "boolean",
-                      "description" : "成功标志",
-                      "default" : "true"
-                    },
-                    "message" : {
-                      "type" : "string",
-                      "description" : "返回处理消息"
-                    },
-                    "code" : {
-                      "type" : "integer",
-                      "description" : "返回代码",
-                      "default" : 0
-                    },
-                    "result" : {
-                      "type" : "string",
-                      "description" : "返回数据对象 data\n返回数据对象"
-                    },
-                    "timestamp" : {
-                      "type" : "integer",
-                      "description" : "时间戳",
-                      "format" : "int64"
-                    }
-                  },
-                  "description" : ""
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/game/chessGame/init" : {
       "post" : {
         "summary" : "游戏初始化",
@@ -2262,6 +620,206 @@
             "nullable" : false
           }
         } ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "成功标志",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "返回处理消息"
+                    },
+                    "code" : {
+                      "type" : "integer",
+                      "description" : "返回代码",
+                      "default" : 0
+                    },
+                    "result" : {
+                      "type" : "string",
+                      "description" : "返回数据对象 data\n返回数据对象"
+                    },
+                    "timestamp" : {
+                      "type" : "integer",
+                      "description" : "时间戳",
+                      "format" : "int64"
+                    }
+                  },
+                  "description" : ""
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/game/chessGame/exportXls" : {
+      "get" : {
+        "summary" : "导出excel",
+        "description" : "导出excel",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "query",
+          "description" : "id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "blackPlayId",
+          "in" : "query",
+          "description" : "黑色id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "blackPlayAccount",
+          "in" : "query",
+          "description" : "黑色账号",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "whitePlayId",
+          "in" : "query",
+          "description" : "白色id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "whitePlayAccount",
+          "in" : "query",
+          "description" : "白色账号",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "gameState",
+          "in" : "query",
+          "description" : "游戏状态。1:进行中2：结束",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "nullable" : false
+          }
+        }, {
+          "name" : "createBy",
+          "in" : "query",
+          "description" : "创建人",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "createTime",
+          "in" : "query",
+          "description" : "创建日期",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "updateBy",
+          "in" : "query",
+          "description" : "更新人",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "updateTime",
+          "in" : "query",
+          "description" : "更新日期",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "sysOrgCode",
+          "in" : "query",
+          "description" : "所属部门",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "delFlag",
+          "in" : "query",
+          "description" : "删除状态",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "nullable" : false
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "view" : {
+                      "type" : "object",
+                      "properties" : { },
+                      "description" : "",
+                      "nullable" : true
+                    },
+                    "model" : {
+                      "type" : "object",
+                      "properties" : {
+                        "key" : {
+                          "type" : "object",
+                          "properties" : { }
+                        }
+                      },
+                      "description" : "",
+                      "nullable" : true
+                    },
+                    "status" : {
+                      "type" : "string",
+                      "description" : "{CONTINUE={@code 100 Continue}., SWITCHING_PROTOCOLS={@code 101 Switching Protocols}., PROCESSING={@code 102 Processing}., CHECKPOINT={@code 103 Checkpoint}., OK={@code 200 OK}., CREATED={@code 201 Created}., ACCEPTED={@code 202 Accepted}., NON_AUTHORITATIVE_INFORMATION={@code 203 Non-Authoritative Information}., NO_CONTENT={@code 204 No Content}., RESET_CONTENT={@code 205 Reset Content}., PARTIAL_CONTENT={@code 206 Partial Content}., MULTI_STATUS={@code 207 Multi-Status}., ALREADY_REPORTED={@code 208 Already Reported}., IM_USED={@code 226 IM Used}., MULTIPLE_CHOICES={@code 300 Multiple Choices}., MOVED_PERMANENTLY={@code 301 Moved Permanently}., FOUND={@code 302 Found}., MOVED_TEMPORARILY={@code 302 Moved Temporarily}., SEE_OTHER={@code 303 See Other}., NOT_MODIFIED={@code 304 Not Modified}., USE_PROXY={@code 305 Use Proxy}., TEMPORARY_REDIRECT={@code 307 Temporary Redirect}., PERMANENT_REDIRECT={@code 308 Permanent Redirect}., BAD_REQUEST={@code 400 Bad Request}., UNAUTHORIZED={@code 401 Unauthorized}., PAYMENT_REQUIRED={@code 402 Payment Required}., FORBIDDEN={@code 403 Forbidden}., NOT_FOUND={@code 404 Not Found}., METHOD_NOT_ALLOWED={@code 405 Method Not Allowed}., NOT_ACCEPTABLE={@code 406 Not Acceptable}., PROXY_AUTHENTICATION_REQUIRED={@code 407 Proxy Authentication Required}., REQUEST_TIMEOUT={@code 408 Request Timeout}., CONFLICT={@code 409 Conflict}., GONE={@code 410 Gone}., LENGTH_REQUIRED={@code 411 Length Required}., PRECONDITION_FAILED={@code 412 Precondition failed}., PAYLOAD_TOO_LARGE={@code 413 Payload Too Large}., REQUEST_ENTITY_TOO_LARGE={@code 413 Request Entity Too Large}., URI_TOO_LONG={@code 414 URI Too Long}., REQUEST_URI_TOO_LONG={@code 414 Request-URI Too Long}., UNSUPPORTED_MEDIA_TYPE={@code 415 Unsupported Media Type}., REQUESTED_RANGE_NOT_SATISFIABLE={@code 416 Requested Range Not Satisfiable}., EXPECTATION_FAILED={@code 417 Expectation Failed}., I_AM_A_TEAPOT={@code 418 I'm a teapot}., INSUFFICIENT_SPACE_ON_RESOURCE=INSUFFICIENT_SPACE_ON_RESOURCE, METHOD_FAILURE=METHOD_FAILURE, DESTINATION_LOCKED=DESTINATION_LOCKED, UNPROCESSABLE_ENTITY={@code 422 Unprocessable Entity}., LOCKED={@code 423 Locked}., FAILED_DEPENDENCY={@code 424 Failed Dependency}., TOO_EARLY={@code 425 Too Early}., UPGRADE_REQUIRED={@code 426 Upgrade Required}., PRECONDITION_REQUIRED={@code 428 Precondition Required}., TOO_MANY_REQUESTS={@code 429 Too Many Requests}., REQUEST_HEADER_FIELDS_TOO_LARGE={@code 431 Request Header Fields Too Large}., UNAVAILABLE_FOR_LEGAL_REASONS={@code 451 Unavailable For Legal Reasons}., INTERNAL_SERVER_ERROR={@code 500 Internal Server Error}., NOT_IMPLEMENTED={@code 501 Not Implemented}., BAD_GATEWAY={@code 502 Bad Gateway}., SERVICE_UNAVAILABLE={@code 503 Service Unavailable}., GATEWAY_TIMEOUT={@code 504 Gateway Timeout}., HTTP_VERSION_NOT_SUPPORTED={@code 505 HTTP Version Not Supported}., VARIANT_ALSO_NEGOTIATES={@code 506 Variant Also Negotiates}, INSUFFICIENT_STORAGE={@code 507 Insufficient Storage}, LOOP_DETECTED={@code 508 Loop Detected}, BANDWIDTH_LIMIT_EXCEEDED={@code 509 Bandwidth Limit Exceeded}, NOT_EXTENDED={@code 510 Not Extended}, NETWORK_AUTHENTICATION_REQUIRED={@code 511 Network Authentication Required}.}",
+                      "nullable" : true,
+                      "enum" : [ "CONTINUE", "SWITCHING_PROTOCOLS", "PROCESSING", "CHECKPOINT", "OK", "CREATED", "ACCEPTED", "NON_AUTHORITATIVE_INFORMATION", "NO_CONTENT", "RESET_CONTENT", "PARTIAL_CONTENT", "MULTI_STATUS", "ALREADY_REPORTED", "IM_USED", "MULTIPLE_CHOICES", "MOVED_PERMANENTLY", "FOUND", "MOVED_TEMPORARILY", "SEE_OTHER", "NOT_MODIFIED", "USE_PROXY", "TEMPORARY_REDIRECT", "PERMANENT_REDIRECT", "BAD_REQUEST", "UNAUTHORIZED", "PAYMENT_REQUIRED", "FORBIDDEN", "NOT_FOUND", "METHOD_NOT_ALLOWED", "NOT_ACCEPTABLE", "PROXY_AUTHENTICATION_REQUIRED", "REQUEST_TIMEOUT", "CONFLICT", "GONE", "LENGTH_REQUIRED", "PRECONDITION_FAILED", "PAYLOAD_TOO_LARGE", "REQUEST_ENTITY_TOO_LARGE", "URI_TOO_LONG", "REQUEST_URI_TOO_LONG", "UNSUPPORTED_MEDIA_TYPE", "REQUESTED_RANGE_NOT_SATISFIABLE", "EXPECTATION_FAILED", "I_AM_A_TEAPOT", "INSUFFICIENT_SPACE_ON_RESOURCE", "METHOD_FAILURE", "DESTINATION_LOCKED", "UNPROCESSABLE_ENTITY", "LOCKED", "FAILED_DEPENDENCY", "TOO_EARLY", "UPGRADE_REQUIRED", "PRECONDITION_REQUIRED", "TOO_MANY_REQUESTS", "REQUEST_HEADER_FIELDS_TOO_LARGE", "UNAVAILABLE_FOR_LEGAL_REASONS", "INTERNAL_SERVER_ERROR", "NOT_IMPLEMENTED", "BAD_GATEWAY", "SERVICE_UNAVAILABLE", "GATEWAY_TIMEOUT", "HTTP_VERSION_NOT_SUPPORTED", "VARIANT_ALSO_NEGOTIATES", "INSUFFICIENT_STORAGE", "LOOP_DETECTED", "BANDWIDTH_LIMIT_EXCEEDED", "NOT_EXTENDED", "NETWORK_AUTHENTICATION_REQUIRED" ]
+                    },
+                    "cleared" : {
+                      "type" : "boolean",
+                      "description" : ""
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/game/chessGame/importExcel" : {
+      "post" : {
+        "summary" : "通过excel导入数据",
+        "description" : "通过excel导入数据",
         "responses" : {
           "200" : {
             "description" : "",
@@ -3033,6 +1591,242 @@
         }
       }
     },
+    "/game/chessMove/exportXls" : {
+      "get" : {
+        "summary" : "导出excel",
+        "description" : "导出excel",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "query",
+          "description" : "id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "chessGameId",
+          "in" : "query",
+          "description" : "游戏id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "chessPiecesId",
+          "in" : "query",
+          "description" : "棋子id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "piecesType",
+          "in" : "query",
+          "description" : "棋子类别 1:黑 深色，2: 白 浅色",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "nullable" : false
+          }
+        }, {
+          "name" : "fromPositionX",
+          "in" : "query",
+          "description" : "开始X轴位置",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "fromPositionY",
+          "in" : "query",
+          "description" : "开始Y轴位置",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "toPositionX",
+          "in" : "query",
+          "description" : "目标X轴位置",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "toPositionY",
+          "in" : "query",
+          "description" : "目标Y轴位置",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "tookPiecesId",
+          "in" : "query",
+          "description" : "被吃的棋子id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "moveState",
+          "in" : "query",
+          "description" : "行棋状态 1:正常，2:悔棋",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "nullable" : false
+          }
+        }, {
+          "name" : "createBy",
+          "in" : "query",
+          "description" : "创建人",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "createTime",
+          "in" : "query",
+          "description" : "创建日期",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "updateBy",
+          "in" : "query",
+          "description" : "更新人",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "updateTime",
+          "in" : "query",
+          "description" : "更新日期",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "sysOrgCode",
+          "in" : "query",
+          "description" : "所属部门",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "delFlag",
+          "in" : "query",
+          "description" : "删除状态",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "nullable" : false
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "view" : {
+                      "type" : "object",
+                      "properties" : { },
+                      "description" : "",
+                      "nullable" : true
+                    },
+                    "model" : {
+                      "type" : "object",
+                      "properties" : {
+                        "key" : {
+                          "type" : "object",
+                          "properties" : { }
+                        }
+                      },
+                      "description" : "",
+                      "nullable" : true
+                    },
+                    "status" : {
+                      "type" : "string",
+                      "description" : "{CONTINUE={@code 100 Continue}., SWITCHING_PROTOCOLS={@code 101 Switching Protocols}., PROCESSING={@code 102 Processing}., CHECKPOINT={@code 103 Checkpoint}., OK={@code 200 OK}., CREATED={@code 201 Created}., ACCEPTED={@code 202 Accepted}., NON_AUTHORITATIVE_INFORMATION={@code 203 Non-Authoritative Information}., NO_CONTENT={@code 204 No Content}., RESET_CONTENT={@code 205 Reset Content}., PARTIAL_CONTENT={@code 206 Partial Content}., MULTI_STATUS={@code 207 Multi-Status}., ALREADY_REPORTED={@code 208 Already Reported}., IM_USED={@code 226 IM Used}., MULTIPLE_CHOICES={@code 300 Multiple Choices}., MOVED_PERMANENTLY={@code 301 Moved Permanently}., FOUND={@code 302 Found}., MOVED_TEMPORARILY={@code 302 Moved Temporarily}., SEE_OTHER={@code 303 See Other}., NOT_MODIFIED={@code 304 Not Modified}., USE_PROXY={@code 305 Use Proxy}., TEMPORARY_REDIRECT={@code 307 Temporary Redirect}., PERMANENT_REDIRECT={@code 308 Permanent Redirect}., BAD_REQUEST={@code 400 Bad Request}., UNAUTHORIZED={@code 401 Unauthorized}., PAYMENT_REQUIRED={@code 402 Payment Required}., FORBIDDEN={@code 403 Forbidden}., NOT_FOUND={@code 404 Not Found}., METHOD_NOT_ALLOWED={@code 405 Method Not Allowed}., NOT_ACCEPTABLE={@code 406 Not Acceptable}., PROXY_AUTHENTICATION_REQUIRED={@code 407 Proxy Authentication Required}., REQUEST_TIMEOUT={@code 408 Request Timeout}., CONFLICT={@code 409 Conflict}., GONE={@code 410 Gone}., LENGTH_REQUIRED={@code 411 Length Required}., PRECONDITION_FAILED={@code 412 Precondition failed}., PAYLOAD_TOO_LARGE={@code 413 Payload Too Large}., REQUEST_ENTITY_TOO_LARGE={@code 413 Request Entity Too Large}., URI_TOO_LONG={@code 414 URI Too Long}., REQUEST_URI_TOO_LONG={@code 414 Request-URI Too Long}., UNSUPPORTED_MEDIA_TYPE={@code 415 Unsupported Media Type}., REQUESTED_RANGE_NOT_SATISFIABLE={@code 416 Requested Range Not Satisfiable}., EXPECTATION_FAILED={@code 417 Expectation Failed}., I_AM_A_TEAPOT={@code 418 I'm a teapot}., INSUFFICIENT_SPACE_ON_RESOURCE=INSUFFICIENT_SPACE_ON_RESOURCE, METHOD_FAILURE=METHOD_FAILURE, DESTINATION_LOCKED=DESTINATION_LOCKED, UNPROCESSABLE_ENTITY={@code 422 Unprocessable Entity}., LOCKED={@code 423 Locked}., FAILED_DEPENDENCY={@code 424 Failed Dependency}., TOO_EARLY={@code 425 Too Early}., UPGRADE_REQUIRED={@code 426 Upgrade Required}., PRECONDITION_REQUIRED={@code 428 Precondition Required}., TOO_MANY_REQUESTS={@code 429 Too Many Requests}., REQUEST_HEADER_FIELDS_TOO_LARGE={@code 431 Request Header Fields Too Large}., UNAVAILABLE_FOR_LEGAL_REASONS={@code 451 Unavailable For Legal Reasons}., INTERNAL_SERVER_ERROR={@code 500 Internal Server Error}., NOT_IMPLEMENTED={@code 501 Not Implemented}., BAD_GATEWAY={@code 502 Bad Gateway}., SERVICE_UNAVAILABLE={@code 503 Service Unavailable}., GATEWAY_TIMEOUT={@code 504 Gateway Timeout}., HTTP_VERSION_NOT_SUPPORTED={@code 505 HTTP Version Not Supported}., VARIANT_ALSO_NEGOTIATES={@code 506 Variant Also Negotiates}, INSUFFICIENT_STORAGE={@code 507 Insufficient Storage}, LOOP_DETECTED={@code 508 Loop Detected}, BANDWIDTH_LIMIT_EXCEEDED={@code 509 Bandwidth Limit Exceeded}, NOT_EXTENDED={@code 510 Not Extended}, NETWORK_AUTHENTICATION_REQUIRED={@code 511 Network Authentication Required}.}",
+                      "nullable" : true,
+                      "enum" : [ "CONTINUE", "SWITCHING_PROTOCOLS", "PROCESSING", "CHECKPOINT", "OK", "CREATED", "ACCEPTED", "NON_AUTHORITATIVE_INFORMATION", "NO_CONTENT", "RESET_CONTENT", "PARTIAL_CONTENT", "MULTI_STATUS", "ALREADY_REPORTED", "IM_USED", "MULTIPLE_CHOICES", "MOVED_PERMANENTLY", "FOUND", "MOVED_TEMPORARILY", "SEE_OTHER", "NOT_MODIFIED", "USE_PROXY", "TEMPORARY_REDIRECT", "PERMANENT_REDIRECT", "BAD_REQUEST", "UNAUTHORIZED", "PAYMENT_REQUIRED", "FORBIDDEN", "NOT_FOUND", "METHOD_NOT_ALLOWED", "NOT_ACCEPTABLE", "PROXY_AUTHENTICATION_REQUIRED", "REQUEST_TIMEOUT", "CONFLICT", "GONE", "LENGTH_REQUIRED", "PRECONDITION_FAILED", "PAYLOAD_TOO_LARGE", "REQUEST_ENTITY_TOO_LARGE", "URI_TOO_LONG", "REQUEST_URI_TOO_LONG", "UNSUPPORTED_MEDIA_TYPE", "REQUESTED_RANGE_NOT_SATISFIABLE", "EXPECTATION_FAILED", "I_AM_A_TEAPOT", "INSUFFICIENT_SPACE_ON_RESOURCE", "METHOD_FAILURE", "DESTINATION_LOCKED", "UNPROCESSABLE_ENTITY", "LOCKED", "FAILED_DEPENDENCY", "TOO_EARLY", "UPGRADE_REQUIRED", "PRECONDITION_REQUIRED", "TOO_MANY_REQUESTS", "REQUEST_HEADER_FIELDS_TOO_LARGE", "UNAVAILABLE_FOR_LEGAL_REASONS", "INTERNAL_SERVER_ERROR", "NOT_IMPLEMENTED", "BAD_GATEWAY", "SERVICE_UNAVAILABLE", "GATEWAY_TIMEOUT", "HTTP_VERSION_NOT_SUPPORTED", "VARIANT_ALSO_NEGOTIATES", "INSUFFICIENT_STORAGE", "LOOP_DETECTED", "BANDWIDTH_LIMIT_EXCEEDED", "NOT_EXTENDED", "NETWORK_AUTHENTICATION_REQUIRED" ]
+                    },
+                    "cleared" : {
+                      "type" : "boolean",
+                      "description" : ""
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/game/chessMove/importExcel" : {
+      "post" : {
+        "summary" : "通过excel导入数据",
+        "description" : "通过excel导入数据",
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "成功标志",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "返回处理消息"
+                    },
+                    "code" : {
+                      "type" : "integer",
+                      "description" : "返回代码",
+                      "default" : 0
+                    },
+                    "result" : {
+                      "type" : "string",
+                      "description" : "返回数据对象 data\n返回数据对象"
+                    },
+                    "timestamp" : {
+                      "type" : "integer",
+                      "description" : "时间戳",
+                      "format" : "int64"
+                    }
+                  },
+                  "description" : ""
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/game/chessPieces/list" : {
       "get" : {
         "summary" : "棋子位置-分页列表查询",
@@ -3593,6 +2387,215 @@
         }
       }
     },
+    "/game/chessPieces/exportXls" : {
+      "get" : {
+        "summary" : "导出excel",
+        "description" : "导出excel",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "query",
+          "description" : "id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "chessGameId",
+          "in" : "query",
+          "description" : "游戏id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "chessPiecesName",
+          "in" : "query",
+          "description" : "棋子名",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "piecesType",
+          "in" : "query",
+          "description" : "棋子类别 1:黑 深色，2: 白 浅色",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "nullable" : false
+          }
+        }, {
+          "name" : "positionX",
+          "in" : "query",
+          "description" : "X轴",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "positionY",
+          "in" : "query",
+          "description" : "Y轴",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "piecesState",
+          "in" : "query",
+          "description" : "棋子状态 1:正常，2:被吃了，不显示",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "nullable" : false
+          }
+        }, {
+          "name" : "createBy",
+          "in" : "query",
+          "description" : "创建人",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "createTime",
+          "in" : "query",
+          "description" : "创建日期",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "updateBy",
+          "in" : "query",
+          "description" : "更新人",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "updateTime",
+          "in" : "query",
+          "description" : "更新日期",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "sysOrgCode",
+          "in" : "query",
+          "description" : "所属部门",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "delFlag",
+          "in" : "query",
+          "description" : "删除状态",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "nullable" : false
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "view" : {
+                      "type" : "object",
+                      "properties" : { },
+                      "description" : "",
+                      "nullable" : true
+                    },
+                    "model" : {
+                      "type" : "object",
+                      "properties" : {
+                        "key" : {
+                          "type" : "object",
+                          "properties" : { }
+                        }
+                      },
+                      "description" : "",
+                      "nullable" : true
+                    },
+                    "status" : {
+                      "type" : "string",
+                      "description" : "{CONTINUE={@code 100 Continue}., SWITCHING_PROTOCOLS={@code 101 Switching Protocols}., PROCESSING={@code 102 Processing}., CHECKPOINT={@code 103 Checkpoint}., OK={@code 200 OK}., CREATED={@code 201 Created}., ACCEPTED={@code 202 Accepted}., NON_AUTHORITATIVE_INFORMATION={@code 203 Non-Authoritative Information}., NO_CONTENT={@code 204 No Content}., RESET_CONTENT={@code 205 Reset Content}., PARTIAL_CONTENT={@code 206 Partial Content}., MULTI_STATUS={@code 207 Multi-Status}., ALREADY_REPORTED={@code 208 Already Reported}., IM_USED={@code 226 IM Used}., MULTIPLE_CHOICES={@code 300 Multiple Choices}., MOVED_PERMANENTLY={@code 301 Moved Permanently}., FOUND={@code 302 Found}., MOVED_TEMPORARILY={@code 302 Moved Temporarily}., SEE_OTHER={@code 303 See Other}., NOT_MODIFIED={@code 304 Not Modified}., USE_PROXY={@code 305 Use Proxy}., TEMPORARY_REDIRECT={@code 307 Temporary Redirect}., PERMANENT_REDIRECT={@code 308 Permanent Redirect}., BAD_REQUEST={@code 400 Bad Request}., UNAUTHORIZED={@code 401 Unauthorized}., PAYMENT_REQUIRED={@code 402 Payment Required}., FORBIDDEN={@code 403 Forbidden}., NOT_FOUND={@code 404 Not Found}., METHOD_NOT_ALLOWED={@code 405 Method Not Allowed}., NOT_ACCEPTABLE={@code 406 Not Acceptable}., PROXY_AUTHENTICATION_REQUIRED={@code 407 Proxy Authentication Required}., REQUEST_TIMEOUT={@code 408 Request Timeout}., CONFLICT={@code 409 Conflict}., GONE={@code 410 Gone}., LENGTH_REQUIRED={@code 411 Length Required}., PRECONDITION_FAILED={@code 412 Precondition failed}., PAYLOAD_TOO_LARGE={@code 413 Payload Too Large}., REQUEST_ENTITY_TOO_LARGE={@code 413 Request Entity Too Large}., URI_TOO_LONG={@code 414 URI Too Long}., REQUEST_URI_TOO_LONG={@code 414 Request-URI Too Long}., UNSUPPORTED_MEDIA_TYPE={@code 415 Unsupported Media Type}., REQUESTED_RANGE_NOT_SATISFIABLE={@code 416 Requested Range Not Satisfiable}., EXPECTATION_FAILED={@code 417 Expectation Failed}., I_AM_A_TEAPOT={@code 418 I'm a teapot}., INSUFFICIENT_SPACE_ON_RESOURCE=INSUFFICIENT_SPACE_ON_RESOURCE, METHOD_FAILURE=METHOD_FAILURE, DESTINATION_LOCKED=DESTINATION_LOCKED, UNPROCESSABLE_ENTITY={@code 422 Unprocessable Entity}., LOCKED={@code 423 Locked}., FAILED_DEPENDENCY={@code 424 Failed Dependency}., TOO_EARLY={@code 425 Too Early}., UPGRADE_REQUIRED={@code 426 Upgrade Required}., PRECONDITION_REQUIRED={@code 428 Precondition Required}., TOO_MANY_REQUESTS={@code 429 Too Many Requests}., REQUEST_HEADER_FIELDS_TOO_LARGE={@code 431 Request Header Fields Too Large}., UNAVAILABLE_FOR_LEGAL_REASONS={@code 451 Unavailable For Legal Reasons}., INTERNAL_SERVER_ERROR={@code 500 Internal Server Error}., NOT_IMPLEMENTED={@code 501 Not Implemented}., BAD_GATEWAY={@code 502 Bad Gateway}., SERVICE_UNAVAILABLE={@code 503 Service Unavailable}., GATEWAY_TIMEOUT={@code 504 Gateway Timeout}., HTTP_VERSION_NOT_SUPPORTED={@code 505 HTTP Version Not Supported}., VARIANT_ALSO_NEGOTIATES={@code 506 Variant Also Negotiates}, INSUFFICIENT_STORAGE={@code 507 Insufficient Storage}, LOOP_DETECTED={@code 508 Loop Detected}, BANDWIDTH_LIMIT_EXCEEDED={@code 509 Bandwidth Limit Exceeded}, NOT_EXTENDED={@code 510 Not Extended}, NETWORK_AUTHENTICATION_REQUIRED={@code 511 Network Authentication Required}.}",
+                      "nullable" : true,
+                      "enum" : [ "CONTINUE", "SWITCHING_PROTOCOLS", "PROCESSING", "CHECKPOINT", "OK", "CREATED", "ACCEPTED", "NON_AUTHORITATIVE_INFORMATION", "NO_CONTENT", "RESET_CONTENT", "PARTIAL_CONTENT", "MULTI_STATUS", "ALREADY_REPORTED", "IM_USED", "MULTIPLE_CHOICES", "MOVED_PERMANENTLY", "FOUND", "MOVED_TEMPORARILY", "SEE_OTHER", "NOT_MODIFIED", "USE_PROXY", "TEMPORARY_REDIRECT", "PERMANENT_REDIRECT", "BAD_REQUEST", "UNAUTHORIZED", "PAYMENT_REQUIRED", "FORBIDDEN", "NOT_FOUND", "METHOD_NOT_ALLOWED", "NOT_ACCEPTABLE", "PROXY_AUTHENTICATION_REQUIRED", "REQUEST_TIMEOUT", "CONFLICT", "GONE", "LENGTH_REQUIRED", "PRECONDITION_FAILED", "PAYLOAD_TOO_LARGE", "REQUEST_ENTITY_TOO_LARGE", "URI_TOO_LONG", "REQUEST_URI_TOO_LONG", "UNSUPPORTED_MEDIA_TYPE", "REQUESTED_RANGE_NOT_SATISFIABLE", "EXPECTATION_FAILED", "I_AM_A_TEAPOT", "INSUFFICIENT_SPACE_ON_RESOURCE", "METHOD_FAILURE", "DESTINATION_LOCKED", "UNPROCESSABLE_ENTITY", "LOCKED", "FAILED_DEPENDENCY", "TOO_EARLY", "UPGRADE_REQUIRED", "PRECONDITION_REQUIRED", "TOO_MANY_REQUESTS", "REQUEST_HEADER_FIELDS_TOO_LARGE", "UNAVAILABLE_FOR_LEGAL_REASONS", "INTERNAL_SERVER_ERROR", "NOT_IMPLEMENTED", "BAD_GATEWAY", "SERVICE_UNAVAILABLE", "GATEWAY_TIMEOUT", "HTTP_VERSION_NOT_SUPPORTED", "VARIANT_ALSO_NEGOTIATES", "INSUFFICIENT_STORAGE", "LOOP_DETECTED", "BANDWIDTH_LIMIT_EXCEEDED", "NOT_EXTENDED", "NETWORK_AUTHENTICATION_REQUIRED" ]
+                    },
+                    "cleared" : {
+                      "type" : "boolean",
+                      "description" : ""
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/game/chessPieces/importExcel" : {
+      "post" : {
+        "summary" : "通过excel导入数据",
+        "description" : "通过excel导入数据",
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "成功标志",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "返回处理消息"
+                    },
+                    "code" : {
+                      "type" : "integer",
+                      "description" : "返回代码",
+                      "default" : 0
+                    },
+                    "result" : {
+                      "type" : "string",
+                      "description" : "返回数据对象 data\n返回数据对象"
+                    },
+                    "timestamp" : {
+                      "type" : "integer",
+                      "description" : "时间戳",
+                      "format" : "int64"
+                    }
+                  },
+                  "description" : ""
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/game/chessPlayer/list" : {
       "get" : {
         "summary" : "游戏参与者-分页列表查询",
@@ -4113,6 +3116,215 @@
             "nullable" : false
           }
         } ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "成功标志",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "返回处理消息"
+                    },
+                    "code" : {
+                      "type" : "integer",
+                      "description" : "返回代码",
+                      "default" : 0
+                    },
+                    "result" : {
+                      "type" : "string",
+                      "description" : "返回数据对象 data\n返回数据对象"
+                    },
+                    "timestamp" : {
+                      "type" : "integer",
+                      "description" : "时间戳",
+                      "format" : "int64"
+                    }
+                  },
+                  "description" : ""
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/game/chessPlayer/exportXls" : {
+      "get" : {
+        "summary" : "导出excel",
+        "description" : "导出excel",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "query",
+          "description" : "id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "chessGameId",
+          "in" : "query",
+          "description" : "游戏id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "userId",
+          "in" : "query",
+          "description" : "用户id",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "userAccount",
+          "in" : "query",
+          "description" : "用户账号",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "holdChess",
+          "in" : "query",
+          "description" : "执子方：1:黑 深色，2: 白 浅色",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "nullable" : false
+          }
+        }, {
+          "name" : "playLevel",
+          "in" : "query",
+          "description" : "参与者水平：1:一级，2: 二级",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "nullable" : false
+          }
+        }, {
+          "name" : "playType",
+          "in" : "query",
+          "description" : "参与者类型：1:人，2: 机器",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "nullable" : false
+          }
+        }, {
+          "name" : "createBy",
+          "in" : "query",
+          "description" : "创建人",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "createTime",
+          "in" : "query",
+          "description" : "创建日期",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "updateBy",
+          "in" : "query",
+          "description" : "更新人",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "updateTime",
+          "in" : "query",
+          "description" : "更新日期",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "sysOrgCode",
+          "in" : "query",
+          "description" : "所属部门",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "delFlag",
+          "in" : "query",
+          "description" : "删除状态",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "nullable" : false
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "view" : {
+                      "type" : "object",
+                      "properties" : { },
+                      "description" : "",
+                      "nullable" : true
+                    },
+                    "model" : {
+                      "type" : "object",
+                      "properties" : {
+                        "key" : {
+                          "type" : "object",
+                          "properties" : { }
+                        }
+                      },
+                      "description" : "",
+                      "nullable" : true
+                    },
+                    "status" : {
+                      "type" : "string",
+                      "description" : "{CONTINUE={@code 100 Continue}., SWITCHING_PROTOCOLS={@code 101 Switching Protocols}., PROCESSING={@code 102 Processing}., CHECKPOINT={@code 103 Checkpoint}., OK={@code 200 OK}., CREATED={@code 201 Created}., ACCEPTED={@code 202 Accepted}., NON_AUTHORITATIVE_INFORMATION={@code 203 Non-Authoritative Information}., NO_CONTENT={@code 204 No Content}., RESET_CONTENT={@code 205 Reset Content}., PARTIAL_CONTENT={@code 206 Partial Content}., MULTI_STATUS={@code 207 Multi-Status}., ALREADY_REPORTED={@code 208 Already Reported}., IM_USED={@code 226 IM Used}., MULTIPLE_CHOICES={@code 300 Multiple Choices}., MOVED_PERMANENTLY={@code 301 Moved Permanently}., FOUND={@code 302 Found}., MOVED_TEMPORARILY={@code 302 Moved Temporarily}., SEE_OTHER={@code 303 See Other}., NOT_MODIFIED={@code 304 Not Modified}., USE_PROXY={@code 305 Use Proxy}., TEMPORARY_REDIRECT={@code 307 Temporary Redirect}., PERMANENT_REDIRECT={@code 308 Permanent Redirect}., BAD_REQUEST={@code 400 Bad Request}., UNAUTHORIZED={@code 401 Unauthorized}., PAYMENT_REQUIRED={@code 402 Payment Required}., FORBIDDEN={@code 403 Forbidden}., NOT_FOUND={@code 404 Not Found}., METHOD_NOT_ALLOWED={@code 405 Method Not Allowed}., NOT_ACCEPTABLE={@code 406 Not Acceptable}., PROXY_AUTHENTICATION_REQUIRED={@code 407 Proxy Authentication Required}., REQUEST_TIMEOUT={@code 408 Request Timeout}., CONFLICT={@code 409 Conflict}., GONE={@code 410 Gone}., LENGTH_REQUIRED={@code 411 Length Required}., PRECONDITION_FAILED={@code 412 Precondition failed}., PAYLOAD_TOO_LARGE={@code 413 Payload Too Large}., REQUEST_ENTITY_TOO_LARGE={@code 413 Request Entity Too Large}., URI_TOO_LONG={@code 414 URI Too Long}., REQUEST_URI_TOO_LONG={@code 414 Request-URI Too Long}., UNSUPPORTED_MEDIA_TYPE={@code 415 Unsupported Media Type}., REQUESTED_RANGE_NOT_SATISFIABLE={@code 416 Requested Range Not Satisfiable}., EXPECTATION_FAILED={@code 417 Expectation Failed}., I_AM_A_TEAPOT={@code 418 I'm a teapot}., INSUFFICIENT_SPACE_ON_RESOURCE=INSUFFICIENT_SPACE_ON_RESOURCE, METHOD_FAILURE=METHOD_FAILURE, DESTINATION_LOCKED=DESTINATION_LOCKED, UNPROCESSABLE_ENTITY={@code 422 Unprocessable Entity}., LOCKED={@code 423 Locked}., FAILED_DEPENDENCY={@code 424 Failed Dependency}., TOO_EARLY={@code 425 Too Early}., UPGRADE_REQUIRED={@code 426 Upgrade Required}., PRECONDITION_REQUIRED={@code 428 Precondition Required}., TOO_MANY_REQUESTS={@code 429 Too Many Requests}., REQUEST_HEADER_FIELDS_TOO_LARGE={@code 431 Request Header Fields Too Large}., UNAVAILABLE_FOR_LEGAL_REASONS={@code 451 Unavailable For Legal Reasons}., INTERNAL_SERVER_ERROR={@code 500 Internal Server Error}., NOT_IMPLEMENTED={@code 501 Not Implemented}., BAD_GATEWAY={@code 502 Bad Gateway}., SERVICE_UNAVAILABLE={@code 503 Service Unavailable}., GATEWAY_TIMEOUT={@code 504 Gateway Timeout}., HTTP_VERSION_NOT_SUPPORTED={@code 505 HTTP Version Not Supported}., VARIANT_ALSO_NEGOTIATES={@code 506 Variant Also Negotiates}, INSUFFICIENT_STORAGE={@code 507 Insufficient Storage}, LOOP_DETECTED={@code 508 Loop Detected}, BANDWIDTH_LIMIT_EXCEEDED={@code 509 Bandwidth Limit Exceeded}, NOT_EXTENDED={@code 510 Not Extended}, NETWORK_AUTHENTICATION_REQUIRED={@code 511 Network Authentication Required}.}",
+                      "nullable" : true,
+                      "enum" : [ "CONTINUE", "SWITCHING_PROTOCOLS", "PROCESSING", "CHECKPOINT", "OK", "CREATED", "ACCEPTED", "NON_AUTHORITATIVE_INFORMATION", "NO_CONTENT", "RESET_CONTENT", "PARTIAL_CONTENT", "MULTI_STATUS", "ALREADY_REPORTED", "IM_USED", "MULTIPLE_CHOICES", "MOVED_PERMANENTLY", "FOUND", "MOVED_TEMPORARILY", "SEE_OTHER", "NOT_MODIFIED", "USE_PROXY", "TEMPORARY_REDIRECT", "PERMANENT_REDIRECT", "BAD_REQUEST", "UNAUTHORIZED", "PAYMENT_REQUIRED", "FORBIDDEN", "NOT_FOUND", "METHOD_NOT_ALLOWED", "NOT_ACCEPTABLE", "PROXY_AUTHENTICATION_REQUIRED", "REQUEST_TIMEOUT", "CONFLICT", "GONE", "LENGTH_REQUIRED", "PRECONDITION_FAILED", "PAYLOAD_TOO_LARGE", "REQUEST_ENTITY_TOO_LARGE", "URI_TOO_LONG", "REQUEST_URI_TOO_LONG", "UNSUPPORTED_MEDIA_TYPE", "REQUESTED_RANGE_NOT_SATISFIABLE", "EXPECTATION_FAILED", "I_AM_A_TEAPOT", "INSUFFICIENT_SPACE_ON_RESOURCE", "METHOD_FAILURE", "DESTINATION_LOCKED", "UNPROCESSABLE_ENTITY", "LOCKED", "FAILED_DEPENDENCY", "TOO_EARLY", "UPGRADE_REQUIRED", "PRECONDITION_REQUIRED", "TOO_MANY_REQUESTS", "REQUEST_HEADER_FIELDS_TOO_LARGE", "UNAVAILABLE_FOR_LEGAL_REASONS", "INTERNAL_SERVER_ERROR", "NOT_IMPLEMENTED", "BAD_GATEWAY", "SERVICE_UNAVAILABLE", "GATEWAY_TIMEOUT", "HTTP_VERSION_NOT_SUPPORTED", "VARIANT_ALSO_NEGOTIATES", "INSUFFICIENT_STORAGE", "LOOP_DETECTED", "BANDWIDTH_LIMIT_EXCEEDED", "NOT_EXTENDED", "NETWORK_AUTHENTICATION_REQUIRED" ]
+                    },
+                    "cleared" : {
+                      "type" : "boolean",
+                      "description" : ""
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/game/chessPlayer/importExcel" : {
+      "post" : {
+        "summary" : "通过excel导入数据",
+        "description" : "通过excel导入数据",
         "responses" : {
           "200" : {
             "description" : "",

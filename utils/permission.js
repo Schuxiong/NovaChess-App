@@ -32,9 +32,15 @@ export function checkPermi(value) {
  */
 export function checkRole(value) {
   if (value && value instanceof Array && value.length > 0) {
-    const roles = store.getters && store.getters.roles
+    const roles = store.getters && store.getters.roles || []
     const permissionRoles = value
     const super_admin = "admin"
+    
+    // 确保roles是数组
+    if (!Array.isArray(roles)) {
+      console.error('roles不是数组类型')
+      return false
+    }
 
     const hasRole = roles.some(role => {
       return super_admin === role || permissionRoles.includes(role)
