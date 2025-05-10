@@ -178,4 +178,13 @@ export function clearPendingInvitations(userId) {
     method: 'post',
     data: { userId }
   })
+}
+
+// 根据邀请ID获取游戏ID
+export function getGameIdByInviteId(sourceInviteId) {
+  return request({
+    url: '/game/chessGame/getGameIdByInviteId',
+    method: 'get',
+    params: { sourceInviteId }
+  });
 } 

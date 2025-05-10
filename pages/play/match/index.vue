@@ -253,11 +253,14 @@
   } from '@/utils/chess/cheesLogic';
   
   // 导入对弈关系API
-  import { queryPendingInvitations, respondInvitation, addChessFriendPair, listChessFriendPair, cancelInvitation, clearPendingInvitations, getInvitationStatus } from '@/api/pair';
+  import { queryPendingInvitations, respondInvitation, addChessFriendPair, listChessFriendPair, cancelInvitation, clearPendingInvitations, getInvitationStatus, getGameIdByInviteId } from '@/api/pair';
   // 导入游戏相关API
   import { initGame, moveChess, getChessMovesHistory, updateGameStatus, enterGame } from '@/api/game';
   // 导入用户API
   import { getUserData } from '@/api/system/user';
+  
+  // 导入WebSocket服务
+  import { connectWebSocket, subscribeToTopic, sendMessage, disconnectWebSocket, unsubscribeFromTopic } from '@/utils/websocket.js';
   
   export default {
     components: {
@@ -357,6 +360,13 @@
         pendingInviteId: null, // 当前正在等待的游戏邀请ID
         inviteStatusTimer: null, // 轮询邀请状态的定时器
         inviteTimeoutTimer: null, // 轮询邀请超时的定时器
+        
+        // WebSocket 相关状态
+        webSocketService: {
+          stompClient: null,
+          gameSubscription: null,
+          gameIdForSubscription: null 
+        },
       }
     },
     computed: {
@@ -450,7 +460,10 @@
       
       // 停止轮询
       this.stopPollingInvitations();
-      this.stopPollingGameMoves();
+      // this.stopPollingGameMoves(); // 将通过WebSocket处理行棋
+      
+      // 关闭WebSocket连接
+      this.disconnectWebSocketInternal();
     },
     methods: {
       // 格式化时间显示
@@ -722,9 +735,14 @@
                   icon: 'none'
                 });
                 
-                // 如果是黑方，开始轮询对方行棋
-                if (this.playAs === 'black') {
-                  this.startPollingGameMoves();
+                // 如果是黑方，开始轮询对方行棋 - 改为WebSocket后，此处不再需要轮询
+                // if (this.playAs === 'black') {
+                //   this.startPollingGameMoves();
+                // }
+                
+                // 初始化WebSocket连接
+                if (this.currentGameId) {
+                  this.initWebSocket(this.currentGameId);
                 }
               } else {
                 uni.showToast({
@@ -796,106 +814,90 @@
         return calculateAlgebraicNotation(from, to, piece, this.chessboard, captured);
       },
       
-      // 移动棋子
-      movePiece(fromRow, fromCol, toRow, toCol, moveInfo = {}) {
-        // 检查是否是兵升变
-        const piece = this.chessboard[fromRow][fromCol];
-        const isPawn = getPieceType(piece) === 'pawn';
-        const isReachingEnd = (getPieceColor(piece) === 'white' && toRow === 0) || 
-                              (getPieceColor(piece) === 'black' && toRow === 7);
+      /**
+       * 处理用户走棋
+       */
+      movePiece(fromPos, toPos, promoteTo = null) {
+        // 如果游戏未开始或已结束，或者不是当前玩家的回合，不允许走棋
+        if (!this.gameStarted || this.gameResult || this.isCheckmated ||
+            (this.playAs === 'white' && this.currentPlayer !== 'white') ||
+            (this.playAs === 'black' && this.currentPlayer !== 'black')) {
+          console.log('无法走棋: 游戏未开始/已结束，或者不是您的回合');
+          return false;
+        }
         
-        if (isPawn && isReachingEnd && !moveInfo.promoteTo) {
-          // 显示升变对话框
-          if (this.$refs.chessBoard) {
-            const result = this.$refs.chessBoard.checkForPromotion({
-              from: { row: fromRow, col: fromCol },
-              to: { row: toRow, col: toCol }
+        // 从位置字符串解析行列
+        const fromCol = this.columns.indexOf(fromPos[0]);
+        const fromRow = 8 - parseInt(fromPos[1]);
+        const toCol = this.columns.indexOf(toPos[0]);
+        const toRow = 8 - parseInt(toPos[1]);
+        
+        if (fromCol === -1 || toCol === -1 || fromRow < 0 || fromRow > 7 || toRow < 0 || toRow > 7) {
+          console.error('无效的棋子位置:', fromPos, toPos);
+          return false;
+        }
+        
+        // 获取要移动的棋子
+        const piece = this.chessboard[fromRow][fromCol];
+        
+        if (!piece) {
+          console.error('起始位置没有棋子:', fromPos);
+          return false;
+        }
+        
+        // 检查是否是当前玩家的棋子
+        const pieceColor = getPieceColor(piece);
+        if ((this.playAs === 'white' && pieceColor !== 'white') ||
+            (this.playAs === 'black' && pieceColor !== 'black')) {
+          console.error('无法移动对手的棋子');
+          return false;
+        }
+        
+        // 这里逻辑调整：
+        // 1. 构建移动信息
+        // 2. 通过WebSocket发送移动请求
+        // 3. 不再直接更新本地棋盘，等待服务器确认后更新
+        
+        // 构建移动信息
+        const moveInfo = {
+          fromPosition: fromPos,
+          toPosition: toPos,
+          promoteTo: promoteTo,
+          playerId: this.currentUserId,
+          playerName: this.playerName || `玩家_${this.currentUserId}`,
+          gameId: this.currentGameId
+        };
+        
+        console.log('发送走棋信息:', moveInfo);
+        
+        // 通过WebSocket发送移动消息
+        if (this.webSocketService.stompClient && this.currentGameId) {
+          // 棋盘移动的声音
+          this.playChessSound('move');
+          
+          // 发送移动消息到服务器
+          const destination = `/app/game/move/${this.currentGameId}`;
+          
+          sendMessage(destination, moveInfo)
+            .then(() => {
+              console.log('走棋消息发送成功');
+            })
+            .catch(error => {
+              console.error('发送走棋消息失败:', error);
+              uni.showToast({
+                title: '走棋失败，请重试',
+                icon: 'none'
+              });
             });
             
-            if (result) {
-              // 升变对话框已显示，等待用户选择
-              return;
-            }
-          }
-        }
-        
-        // 记录被吃掉的棋子
-        const capturedPiece = this.chessboard[toRow][toCol];
-        
-        // 检查是否吃掉对方的王
-        if (capturedPiece && getPieceType(capturedPiece) === 'king') {
-          // 记录将杀状态
-          this.isCheckmated = true;
-          this.checkmateColor = getPieceColor(capturedPiece);
-          
-          // 确定胜负
-          // 如果当前移动的棋子是玩家执的颜色，则玩家胜利
-          const movingColor = getPieceColor(piece);
-          const isPlayerWinner = movingColor === this.playAs;
-          
-          // 设置游戏结果
-          this.gameResult = isPlayerWinner ? `${this.playerName} 胜出（将杀）` : `${this.opponentName} 胜出（将杀）`;
-          
-          // 停止所有计时器
-          this.stopAllTimers();
-          
-          // 使用玩家视角显示将杀特效
-          if (this.$refs.chessBoard) {
-            this.$refs.chessBoard.showCheckmate(true, this.checkmateColor);
-          }
-          
-          // 更新游戏状态
-          this.updateGameStatusToServer(isPlayerWinner ? 1 : 2); // 1:胜，2:负
-          
-          // 2秒后显示结果弹窗
-          setTimeout(() => {
-            this.showResultPopup(isPlayerWinner ? 'victory' : 'defeat');
-          }, 2000);
-        }
-        
-        // 尝试移动棋子，记录移动结果
-        const move = recordMove(this.chessboard, 
-          { row: fromRow, col: fromCol }, 
-          { row: toRow, col: toCol }, 
-          moveInfo
-        );
-        
-        // 记录移动历史
-        this.moveHistory.push(move);
-        
-        // 记录走棋记录
-        this.recordMoveHistory(
-          { row: fromRow, col: fromCol },
-          { row: toRow, col: toCol },
-          piece,
-          capturedPiece
-        );
-        
-        // 切换玩家
-        this.currentPlayer = this.currentPlayer === 'white' ? 'black' : 'white';
-        
-        // 更新lastMove属性
-        this.lastMove = move;
-        
-        // 如果是玩家的行棋，发送到服务器
-        const isPlayerMove = (this.playAs === 'white' && move.piece.color === 'white') || 
-                             (this.playAs === 'black' && move.piece.color === 'black');
-        
-        if (isPlayerMove && this.currentGameId) {
-          this.sendMoveToServer(fromRow, fromCol, toRow, toCol, move);
-        }
-        
-        // 如果游戏未结束，切换计时器并检查游戏结局
-        if (!this.isCheckmated) {
-          // 切换计时器 - 当前高亮的玩家开始计时
-          if (this.currentPlayer === 'white') {
-            this.startWhiteTimer();
-          } else {
-            this.startBlackTimer();
-          }
-          
-          // 检查游戏结局
-          this.checkGameOutcome();
+          return true;
+        } else {
+          console.error('WebSocket客户端未初始化或缺少游戏ID，无法发送走棋消息');
+          uni.showToast({
+            title: '网络连接中断，请重新连接',
+            icon: 'none'
+          });
+          return false;
         }
       },
       
@@ -953,7 +955,7 @@
       // 处理将杀情况
       handleCheckmate() {
         this.stopAllTimers();
-        this.stopPollingGameMoves(); // 停止轮询行棋
+        // this.stopPollingGameMoves(); // 停止轮询行棋 - WebSocket会处理
         
         // 当前玩家（失败者）的颜色
         const loserColor = this.currentPlayer;
@@ -986,7 +988,7 @@
       // 处理逼和情况
       handleStalemate() {
         this.stopAllTimers();
-        this.stopPollingGameMoves(); // 停止轮询行棋
+        // this.stopPollingGameMoves(); // 停止轮询行棋 - WebSocket会处理
         
         this.gameResult = '和棋（逼和）';
         
@@ -1208,36 +1210,48 @@
                   this.opponentName = invite.acceptUserInfo.realname || invite.acceptUserInfo.username || '对手';
                 }
                 
-                // 发起方直接进入游戏 - 游戏已由接收方初始化
-                enterGame().then(enterRes => {
-                  console.log('发起方进入游戏结果:', enterRes);
-                  if (enterRes.success) {
-                    console.log('发起方成功进入游戏');
+                // 新增：根据邀请ID获取游戏ID
+                this.getGameIdFromInvitation(this.pendingInviteId).then(gameId => {
+                  if (gameId) {
+                    console.log('已从邀请获取游戏ID:', gameId);
+                    this.currentGameId = gameId;
                     
-                    // 开始计时
-                    this.startWhiteTimer();
-                    
-                    // 如果是黑方，开始轮询对方行棋
-                    if (this.playAs === 'black') {
-                      this.startPollingGameMoves();
-                    }
-                    
-                    uni.showToast({
-                      title: `对局已开始，您执${this.playAs === 'white' ? '白' : '黑'}子`,
-                      icon: 'success'
+                    // 发起方直接进入游戏 - 游戏已由接收方初始化
+                    enterGame().then(enterRes => {
+                      console.log('发起方进入游戏结果:', enterRes);
+                      if (enterRes.success) {
+                        console.log('发起方成功进入游戏');
+                        
+                        // 开始计时
+                        this.startWhiteTimer();
+                        
+                        // 初始化WebSocket连接
+                        this.initWebSocket(this.currentGameId);
+                        
+                        uni.showToast({
+                          title: `对局已开始，您执${this.playAs === 'white' ? '白' : '黑'}子`,
+                          icon: 'success'
+                        });
+                      } else {
+                        uni.showToast({
+                          title: enterRes.message || '进入游戏失败',
+                          icon: 'none'
+                        });
+                      }
+                    }).catch(err => {
+                      console.error('进入游戏失败', err);
+                      uni.showToast({
+                        title: '进入游戏失败，请重试',
+                        icon: 'none'
+                      });
                     });
                   } else {
+                    console.error('无法获取游戏ID，无法建立WebSocket连接');
                     uni.showToast({
-                      title: enterRes.message || '进入游戏失败',
+                      title: '无法建立实时连接，请重试',
                       icon: 'none'
                     });
                   }
-                }).catch(err => {
-                  console.error('进入游戏失败', err);
-                  uni.showToast({
-                    title: '进入游戏失败，请重试',
-                    icon: 'none'
-                  });
                 });
               } else if (invite.status === 3) {
                 // 对方拒绝了邀请
@@ -1291,9 +1305,14 @@
                       // 开始计时
                       this.startWhiteTimer();
                       
-                      // 如果是黑方，开始轮询对方行棋
-                      if (this.playAs === 'black') {
-                        this.startPollingGameMoves();
+                      // 如果是黑方，开始轮询对方行棋 - 改为WebSocket后，此处不再需要轮询
+                      // if (this.playAs === 'black') {
+                      //   this.startPollingGameMoves();
+                      // }
+                      
+                      // 初始化WebSocket连接
+                      if (this.currentGameId) {
+                        this.initWebSocket(this.currentGameId);
                       }
                       
                       uni.showToast({
@@ -1404,16 +1423,21 @@
                 this.currentGameId = initRes.result.id || initRes.result;
                 console.log('接收方成功初始化游戏，ID:', this.currentGameId);
                 
-                // 接收方初始化后不需要再调用enter
-                // 直接设置游戏状态和开始计时
-                console.log('接收方已初始化游戏，无需再调用enter');
-                
                 // 开始计时
                 this.startWhiteTimer();
                 
-                // 如果是黑方，开始轮询对方行棋
-                if (this.playAs === 'black') {
-                  this.startPollingGameMoves();
+                // 初始化WebSocket连接
+                if (this.currentGameId) {
+                  this.initWebSocket(this.currentGameId);
+                  
+                  // 发送一个GAME_START事件到WebSocket以通知发起方
+                  const destination = `/app/game/start/${this.currentGameId}`;
+                  sendMessage(destination, {
+                    gameId: this.currentGameId,
+                    userId: this.currentUserId,
+                    playerName: this.playerName,
+                    playerColor: this.playAs
+                  });
                 }
                 
                 uni.showToast({
@@ -1476,9 +1500,14 @@
             // 开始计时
             this.startWhiteTimer();
             
-            // 如果是黑方，开始轮询对方行棋
-            if (this.playAs === 'black') {
-              this.startPollingGameMoves();
+            // 如果是黑方，开始轮询对方行棋 - 改为WebSocket后，此处不再需要轮询
+            // if (this.playAs === 'black') {
+            //   this.startPollingGameMoves();
+            // }
+            
+            // 初始化WebSocket连接
+            if (this.currentGameId) {
+              this.initWebSocket(this.currentGameId);
             }
           } else {
             uni.showToast({
@@ -1510,79 +1539,82 @@
       
       // 开始轮询游戏行棋
       startPollingGameMoves() {
-        // 清除可能的现有定时器
-        if (this.pollingGameMovesTimer) {
-          clearInterval(this.pollingGameMovesTimer);
-        }
+        // // 清除可能的现有定时器
+        // if (this.pollingGameMovesTimer) {
+        //   clearInterval(this.pollingGameMovesTimer);
+        // }
         
-        // 设置定时器，每2秒查询一次
-        this.pollingGameMovesTimer = setInterval(() => {
-          this.checkGameMoves();
-        }, 2000);
+        // // 设置定时器，每2秒查询一次
+        // this.pollingGameMovesTimer = setInterval(() => {
+        //   this.checkGameMoves();
+        // }, 2000);
         
-        // 立即执行一次
-        this.checkGameMoves();
+        // // 立即执行一次
+        // this.checkGameMoves();
+        console.log("startPollingGameMoves 已被WebSocket取代，不再执行。");
       },
       
       // 停止轮询游戏行棋
       stopPollingGameMoves() {
-        if (this.pollingGameMovesTimer) {
-          clearInterval(this.pollingGameMovesTimer);
-          this.pollingGameMovesTimer = null;
-        }
+        // if (this.pollingGameMovesTimer) {
+        //   clearInterval(this.pollingGameMovesTimer);
+        //   this.pollingGameMovesTimer = null;
+        // }
+        console.log("stopPollingGameMoves 已被WebSocket取代，不再执行。");
       },
       
       // 查询游戏行棋
       checkGameMoves() {
-        if (!this.currentGameId) {
-          console.log('没有游戏ID，不查询行棋');
-          return;
-        }
+        // if (!this.currentGameId) {
+        //   console.log('没有游戏ID，不查询行棋');
+        //   return;
+        // }
         
-        // 构造查询参数
-        const params = {
-          chessGameId: this.currentGameId,
-          pageNo: 1,
-          pageSize: 50
-        };
+        // // 构造查询参数
+        // const params = {
+        //   chessGameId: this.currentGameId,
+        //   pageNo: 1,
+        //   pageSize: 50
+        // };
         
-        // 调用行棋列表API
-        getChessMovesHistory(params).then(res => {
-          if (res.success && res.result && res.result.records) {
-            const moves = res.result.records;
-            console.log('获取到行棋记录:', moves.length, '条');
+        // // 调用行棋列表API
+        // getChessMovesHistory(params).then(res => {
+        //   if (res.success && res.result && res.result.records) {
+        //     const moves = res.result.records;
+        //     console.log('获取到行棋记录:', moves.length, '条');
             
-            if (moves.length > 0) {
-              // 排序确保按时间顺序
-              moves.sort((a, b) => {
-                const timeA = new Date(a.createTime || 0).getTime();
-                const timeB = new Date(b.createTime || 0).getTime();
-                return timeA - timeB;
-              });
+        //     if (moves.length > 0) {
+        //       // 排序确保按时间顺序
+        //       moves.sort((a, b) => {
+        //         const timeA = new Date(a.createTime || 0).getTime();
+        //         const timeB = new Date(b.createTime || 0).getTime();
+        //         return timeA - timeB;
+        //       });
               
-              // 获取最新的行棋
-              const latestMove = moves[moves.length - 1];
+        //       // 获取最新的行棋
+        //       const latestMove = moves[moves.length - 1];
               
-              // 如果有新的行棋且不是自己的行棋
-              if (latestMove.id !== this.lastMoveId) {
-                console.log('发现新的行棋:', latestMove);
-                this.lastMoveId = latestMove.id;
+        //       // 如果有新的行棋且不是自己的行棋
+        //       if (latestMove.id !== this.lastMoveId) {
+        //         console.log('发现新的行棋:', latestMove);
+        //         this.lastMoveId = latestMove.id;
                 
-                // 如果是对方行棋且当前是对方回合
-                const isMoveByOpponent = latestMove.createBy !== this.currentUserId;
-                const isOpponentTurn = (this.playAs === 'white' && this.currentPlayer === 'black') ||
-                                      (this.playAs === 'black' && this.currentPlayer === 'white');
+        //         // 如果是对方行棋且当前是对方回合
+        //         const isMoveByOpponent = latestMove.createBy !== this.currentUserId;
+        //         const isOpponentTurn = (this.playAs === 'white' && this.currentPlayer === 'black') ||
+        //                               (this.playAs === 'black' && this.currentPlayer === 'white');
                 
-                if (isMoveByOpponent && isOpponentTurn) {
-                  // 应用对方的行棋到棋盘
-                  this.applyOpponentMove(latestMove);
-                }
-              }
-            }
-          }
-        }).catch(err => {
-          console.error('查询行棋记录失败', err);
-        });
+        //         if (isMoveByOpponent && isOpponentTurn) {
+        //           // 应用对方的行棋到棋盘
+        //           this.applyOpponentMove(latestMove);
+        //         }
+        //       }
+        //     }
+        //   }
+        // }).catch(err => {
+        //   console.error('查询行棋记录失败', err);
+        // });
+        console.log("checkGameMoves 已被WebSocket取代，不再执行。");
       },
       
       // 应用对方行棋到棋盘
@@ -1608,47 +1640,36 @@
       },
       
       // 发送行棋到服务器
-      sendMoveToServer(fromRow, fromCol, toRow, toCol, move) {
+      sendMoveToServer(fromRow, fromCol, toRow, toCol, pieceMoved, moveInfo = {}) {
         // 转换位置格式
         const fromX = this.columns[fromCol]; // a-h
         const fromY = 8 - fromRow; // 1-8
         const toX = this.columns[toCol]; // a-h
         const toY = 8 - toRow; // 1-8
         
-        // 构造行棋数据
-        const moveData = {
-          chessGameId: this.currentGameId,
-          chessPiecesId: move.piece.id || this.generatePieceId(move.piece),
-          piecesType: move.piece.color === 'white' ? 2 : 1, // 1:黑 深色，2:白 浅色
-          fromPositionX: fromX,
-          fromPositionY: fromY.toString(),
-          toPositionX: toX,
-          toPositionY: toY.toString(),
-          tookPiecesId: move.capturedPiece ? 
-                       (move.capturedPiece.id || this.generatePieceId(move.capturedPiece)) : 
-                       '',
-          moveState: 1 // 1:正常
+        // 构造行棋数据 - 结构需与后端 /app/movepieces (或/app/game/move/{gameId}) 期望的一致
+        // 参考 websocket业务流程.md, 可能需要 ChatChessMoveRequestVO 结构
+        // ChatChessMoveRequestVO: { gameId, userId, fromPosition, toPosition, promotionPieceType }
+        // 当前的 moveDataPayload 更像 ChessGameRecord (用于HTTP API)
+        // 我们先发送一个更接近 ChatChessMoveRequestVO 的简化结构，您需要和后端确认
+        
+        const clientMovePayload = {
+          gameId: this.currentGameId,
+          userId: this.currentUserId,
+          fromPosition: `${fromX}${fromY}`, // e.g., "e2"
+          toPosition: `${toX}${toY}`,     // e.g., "e4"
+          promotionPieceType: moveInfo.promoteTo ? moveInfo.promoteTo.toUpperCase() : null // e.g., "Q" or null
+          // 其他如 isCastling, isEnPassant 等信息，服务器应能自行推断或客户端明确发送
         };
         
-        console.log('发送行棋数据:', moveData);
+        console.log('通过WebSocket发送行棋意图:', clientMovePayload);
         
-        // 调用行棋API
-        moveChess(moveData).then(res => {
-          console.log('行棋结果:', res);
-          if (res.success) {
-            // 如果返回了行棋ID，记录下来
-            if (res.result) {
-              this.lastMoveId = res.result.id || res.result;
-            }
-          } else {
-            uni.showToast({
-              title: res.message || '行棋失败',
-              icon: 'none'
-            });
-          }
-        }).catch(err => {
-          console.error('行棋请求失败', err);
-        });
+        // 通过WebSocket发送消息 - 目标地址也需要和后端确认
+        // websocket业务流程.md 提及 /app/movepieces
+        // WebChessSocketConfig.java 提及 /app/game/move/{gameId}
+        // 保持使用 /app/game/move/{gameId} 以与之前代码和配置一致
+        const destination = `/app/game/move/${this.currentGameId}`; 
+        sendMessage(destination, clientMovePayload);
       },
       
       // 为棋子生成一个简易ID（如果后端没有返回）
@@ -2454,9 +2475,14 @@
             // 开始计时
             this.startWhiteTimer();
             
-            // 如果是黑方，开始轮询对方行棋
-            if (this.playAs === 'black') {
-              this.startPollingGameMoves();
+            // 如果是黑方，开始轮询对方行棋 - 改为WebSocket后，此处不再需要轮询
+            // if (this.playAs === 'black') {
+            //   this.startPollingGameMoves();
+            // }
+            
+            // 初始化WebSocket连接
+            if (this.currentGameId) {
+              this.initWebSocket(this.currentGameId);
             }
             
             uni.showToast({
@@ -2492,6 +2518,441 @@
           console.log('成功清理旧邀请');
         }).catch(err => {
           console.error('清理旧邀请失败:', err);
+        });
+      },
+      
+      // WebSocket相关方法
+      initWebSocket(gameId) {
+        if (!gameId) {
+          console.error('初始化WebSocket失败: 缺少游戏ID');
+          return;
+        }
+        
+        if (!this.currentUserId) {
+          console.error('初始化WebSocket失败: 缺少用户ID');
+          return;
+        }
+        
+        // 如果已经有连接，先断开
+        if (this.webSocketService.stompClient) {
+          try {
+            disconnectWebSocket();
+            console.log('断开现有WebSocket连接');
+          } catch (e) {
+            console.warn('断开WebSocket时出错:', e);
+          }
+        }
+        
+        // 清除现有订阅
+        this.webSocketService.gameSubscription = null;
+        
+        // 连接WebSocket
+        console.log(`尝试连接WebSocket，用户ID: ${this.currentUserId}，游戏ID: ${gameId}`);
+        
+        connectWebSocket(
+          this.currentUserId,
+          (client) => {
+            console.log('WebSocket连接成功:', client);
+            this.webSocketService.stompClient = client;
+            
+            // 保存当前订阅的游戏ID
+            this.webSocketService.gameIdForSubscription = gameId;
+            
+            // 订阅游戏主题以接收更新
+            const gameTopic = `/topic/game/${gameId}`;
+            
+            console.log(`订阅游戏主题: ${gameTopic}`);
+            
+            this.webSocketService.gameSubscription = subscribeToTopic(
+              gameTopic,
+              (message) => {
+                try {
+                  // 尝试解析消息
+                  const data = JSON.parse(message.body);
+                  console.log('WebSocket收到消息:', data);
+                  
+                  // 处理消息
+                  this.handleWebSocketMessage(data);
+                } catch (e) {
+                  console.error('处理WebSocket消息时出错:', e, message);
+                }
+              }
+            );
+            
+            // 发送PLAYER_JOINED消息通知其他玩家
+            console.log('向服务器发送玩家加入消息');
+            
+            const destination = `/app/game/join/${gameId}`;
+            sendMessage(destination, {
+              gameId: gameId,
+              userId: this.currentUserId,
+              username: this.playerName || '玩家_' + this.currentUserId,
+              playerColor: this.playAs
+            });
+          },
+          (error) => {
+            console.error('WebSocket连接错误:', error);
+            uni.showToast({
+              title: '连接实时服务失败，对局可能不会实时更新',
+              icon: 'none',
+              duration: 3000
+            });
+          }
+        );
+      },
+    
+      handleWebSocketMessage(message) {
+        console.log('WebSocket: 收到消息:', message);
+        if (!message || typeof message !== 'object') {
+            console.warn('WebSocket: 收到无效消息格式', message);
+            return;
+        }
+    
+        // 根据后端实际发送的消息类型进行处理
+        switch (message.type) {
+          case 'PLAYER_JOINED':
+            console.log(`WebSocket: 玩家 ${message.username} (ID: ${message.userId}) 加入游戏 ${message.gameId}`);
+            // 更新对手信息等UI
+            if (message.userId !== this.currentUserId) {
+                this.opponentName = message.username || this.opponentName; // 更新对手名称
+                uni.showToast({ title: `玩家 ${message.username || '对手'} 加入游戏`, icon: 'none' });
+                
+                // 重要：收到对手加入的通知，清除等待状态
+                if (this.gameStarted) {
+                    this.$nextTick(() => {
+                      // 通知组件更新UI状态
+                      this.$forceUpdate();
+                    });
+                }
+            }
+            break;
+            
+          case 'GAME_START': // 处理游戏开始消息
+            console.log('WebSocket: 收到游戏开始消息', message);
+            if (message.payload && message.payload.gameId) {
+                // 确认双方都已就绪
+                this.gameStarted = true;
+                // 如果有初始游戏状态，更新棋盘
+                if (message.payload.initialGameState) {
+                    this.updateGameViewFromServer(message.payload.initialGameState);
+                }
+                
+                // 清除等待状态，强制更新UI
+                this.$nextTick(() => {
+                    this.$forceUpdate();
+                });
+                
+                uni.showToast({ title: '对局已开始，双方都已就绪', icon: 'success' });
+            }
+            break;
+            
+          case 'MOVE_UPDATE':
+            console.log('WebSocket: 收到走棋更新', message);
+            if (message.payload) {
+                const moveInfo = message.payload.moveInfo;
+                const latestGameState = message.payload.latestGameState;
+                
+                if (moveInfo) {
+                    console.log('收到走棋:', moveInfo);
+                    // 从服务器接收到的行棋信息
+                    
+                    // 如果移动不是由当前用户发起的，则更新界面
+                    if (moveInfo.playerId !== this.currentUserId) {
+                        // 更新界面提示 - 对手已走棋
+                        uni.showToast({
+                            title: '对手已走棋，轮到您下棋',
+                            icon: 'none'
+                        });
+                        
+                        // 发出走棋声音
+                        this.playChessSound('move');
+                    }
+                }
+                
+                // 无论谁走的棋，都使用服务器返回的最新游戏状态更新棋盘
+                if (latestGameState) {
+                    this.updateGameViewFromServer(latestGameState);
+                }
+            }
+            break;
+            
+          case 'GAME_END':
+            console.log('WebSocket: 收到游戏结束消息', message);
+            if (message.payload) {
+                const result = message.payload.result;
+                const winner = message.payload.winner;
+                const winType = message.payload.winType || 'CHECKMATE';
+                
+                // 更新游戏结果
+                this.gameResult = result; // 例如 "WHITE_WIN", "BLACK_WIN", "DRAW"
+                
+                // 根据结果更新界面
+                let resultText = '游戏结束: ';
+                if (result === 'WHITE_WIN') {
+                    resultText += '白方获胜';
+                    if (this.playAs === 'white') {
+                        resultText += ' - 恭喜您赢了!';
+                    } else {
+                        resultText += ' - 您输了';
+                    }
+                } else if (result === 'BLACK_WIN') {
+                    resultText += '黑方获胜';
+                    if (this.playAs === 'black') {
+                        resultText += ' - 恭喜您赢了!';
+                    } else {
+                        resultText += ' - 您输了';
+                    }
+                } else if (result === 'DRAW') {
+                    resultText += '平局';
+                }
+                
+                // 显示结果
+                uni.showModal({
+                    title: '游戏结束',
+                    content: resultText,
+                    showCancel: false,
+                    success: () => {
+                        // 可以在这里添加游戏结束后的操作，如返回主页等
+                    }
+                });
+                
+                // 停止所有计时器
+                this.stopTimers();
+            }
+            break;
+            
+          default:
+            console.log('WebSocket: 未处理的消息类型', message.type);
+        }
+      },
+
+      disconnectWebSocketInternal() {
+        if (this.webSocketService.stompClient) {
+          console.log('WebSocket: Disconnecting...');
+          // unsubscribeFromTopic 会处理单个订阅的取消
+          // disconnectWebSocket 会取消所有订阅并关闭连接
+          disconnectWebSocket(); 
+          this.webSocketService.stompClient = null;
+          this.webSocketService.gameSubscription = null;
+          this.webSocketService.gameIdForSubscription = null;
+          console.log('WebSocket: Disconnected and cleaned up.');
+        }
+      },
+      
+      // 新增：根据服务器的 ChessGameVO 更新前端视图
+      updateGameViewFromServer(gameState) {
+        if (!gameState) {
+          console.error('updateGameViewFromServer: gameState is null or undefined');
+          return;
+        }
+        console.log('Updating game view from server state:', gameState);
+
+        // 1. 更新棋盘 (this.chessboard)
+        //    您需要根据 ChessGameVO 的实际结构来转换。
+        //    假设 gameState.board (或 gameState.chessPieces) 是一个描述棋盘的对象或数组
+        //    例如: gameState.chessPieces = [{ piece: 'ROOK_WHITE', position: 'a1' }, ...]
+        //    或者 gameState.board = [ ['r','n','b','q','k','b','n','r'], ..., ['P','P',...] ] (fen-like row)
+        //    这里需要一个转换函数将服务器的棋盘表示映射到前端的 this.chessboard 格式
+        
+        if (gameState.boardVO && Array.isArray(gameState.boardVO)) { // 假设 boardVO 是二维数组
+            const newBoard = getInitialChessboard(); // Start with an empty board structure
+            const serverBoard = gameState.boardVO; // e.g. [ ["bR", "bN", ...], ..., ["wP", "wP", ...] ]
+                                                // or serverBoard could be a list of piece objects with positions
+            
+            // 假设服务器的 gameState.boardVO 是一个8x8的二维数组，
+            // 其中包含的元素是类似 "wP" (白兵), "bR" (黑车), "" (空格) 的字符串
+            // 或者更可能是包含棋子对象的列表，如 [{type: 'ROOK', color: 'BLACK', position: 'a8'}, ...]
+            // 您需要根据实际的 ChessGameVO.boardVO 结构来填充 this.chessboard
+            // 以下是一个示例性的转换，假设 gameState.boardVO 是一个棋子对象列表：
+            if (Array.isArray(gameState.pieces)) { // 假设 gameState.pieces 是 [{ type, color, position (e.g. 'e4')}]
+                const boardFromPieces = getInitialChessboard(); // Get a clean board
+                gameState.pieces.forEach(p => {
+                    const col = this.columns.indexOf(p.position.charAt(0).toLowerCase());
+                    const row = 8 - parseInt(p.position.charAt(1));
+                    if (row >=0 && row < 8 && col >=0 && col < 8) {
+                        boardFromPieces[row][col] = { 
+                            type: p.type.toLowerCase(), // 'pawn', 'rook', etc.
+                            color: p.color.toLowerCase(), // 'white', 'black'
+                            id: `${p.color.charAt(0).toLowerCase()}${p.type.charAt(0).toUpperCase()}_${p.position}` // simple id
+                        };
+                    }
+                });
+                this.chessboard = boardFromPieces;
+            } else if (Array.isArray(gameState.boardLayout)) { // 假设是二维数组 "wP", "bR"
+                 // 需要将 "wP" 转换为 { type: 'pawn', color: 'white', id: ... }
+                 const parsedBoard = gameState.boardLayout.map(r => r.map(cell => {
+                     if (!cell || cell.trim() === '') return null;
+                     const color = cell.charAt(0) === 'w' ? 'white' : 'black';
+                     const typeStr = cell.substring(1);
+                     let type = '';
+                     switch(typeStr) {
+                         case 'P': type = 'pawn'; break;
+                         case 'R': type = 'rook'; break;
+                         case 'N': type = 'knight'; break;
+                         case 'B': type = 'bishop'; break;
+                         case 'Q': type = 'queen'; break;
+                         case 'K': type = 'king'; break;
+                         default: return null;
+                     }
+                     return { type, color, id: `${color.charAt(0)}${type.charAt(0).toUpperCase()}_${Math.random()}` }; // Placeholder ID
+                 }));
+                 this.chessboard = parsedBoard;
+            } else {
+                 console.warn("ChessGameVO.boardVO or .pieces not in expected format, board not updated from WebSocket.");
+                 // Fallback or error: maybe request full board again if possible
+            }
+        } else {
+            console.warn('ChessGameVO does not contain boardVO or it is not an array. Board not updated.');
+        }
+
+        // 2. 更新当前行棋方 (this.currentPlayer)
+        //    假设 gameState.currentTurn 是 'WHITE' 或 'BLACK' (字符串)
+        //    或者 gameState.currentTurnPlayerId
+        if (gameState.currentTurn) { // 'WHITE' or 'BLACK'
+          this.currentPlayer = gameState.currentTurn.toLowerCase();
+        } else if (gameState.currentPlayerId) {
+            // Map ID to color if necessary, e.g., if player1 is white and player2 is black
+            // This depends on how player IDs and colors are associated in your game state
+            // For now, let's assume a direct mapping if not 'WHITE'/'BLACK'
+            // this.currentPlayer = (gameState.currentPlayerId === this.playerInfo.id) ? this.playAs : (this.playAs === 'white' ? 'black' : 'white');
+            console.warn("currentPlayerId received, but logic to map to 'white'/'black' is needed based on game setup.");
+        } else {
+            console.warn('Current turn info missing in gameState.');
+        }
+
+        // 3. 更新上一部棋 (this.lastMove) - 用于棋盘高亮
+        //    假设 gameState.lastMove = { from: 'e2', to: 'e4', piece: { type: 'PAWN', color: 'WHITE' } }
+        if (gameState.lastMoveVO) { // Renamed from lastMove to lastMoveVO to match server side potential naming
+          const fromCol = this.columns.indexOf(gameState.lastMoveVO.fromPosition.charAt(0).toLowerCase());
+          const fromRow = 8 - parseInt(gameState.lastMoveVO.fromPosition.charAt(1));
+          const toCol = this.columns.indexOf(gameState.lastMoveVO.toPosition.charAt(0).toLowerCase());
+          const toRow = 8 - parseInt(gameState.lastMoveVO.toPosition.charAt(1));
+          
+          this.lastMove = {
+            from: { row: fromRow, col: fromCol },
+            to: { row: toRow, col: toCol },
+            piece: { // Assuming piece details are part of lastMoveVO or can be inferred
+              type: gameState.lastMoveVO.pieceMoved?.type?.toLowerCase() || '',
+              color: gameState.lastMoveVO.pieceMoved?.color?.toLowerCase() || ''
+            }
+          };
+        } else {
+          this.lastMove = null; // Clear if no last move info
+        }
+
+        // 4. 更新游戏结果/状态 (this.gameResult, this.isCheckmated, this.checkmateColor)
+        if (gameState.gameStatus) { // e.g., "ONGOING", "CHECKMATE_WHITE_WINS", "STALEMATE"
+            switch (gameState.gameStatus) {
+                case 'CHECKMATE_WHITE_WINS':
+                    this.isCheckmated = true;
+                    this.checkmateColor = 'black'; // Black is checkmated
+                    this.gameResult = `${this.playAs === 'white' ? this.playerName : this.opponentName} 胜出 (将杀)`;
+                    this.handleGameEnd(this.playAs === 'white' ? 'victory' : 'defeat');
+                    break;
+                case 'CHECKMATE_BLACK_WINS':
+                    this.isCheckmated = true;
+                    this.checkmateColor = 'white'; // White is checkmated
+                    this.gameResult = `${this.playAs === 'black' ? this.playerName : this.opponentName} 胜出 (将杀)`;
+                    this.handleGameEnd(this.playAs === 'black' ? 'victory' : 'defeat');
+                    break;
+                case 'STALEMATE':
+                    this.gameResult = '和棋 (逼和)';
+                    this.handleGameEnd('draw');
+                    break;
+                case 'ONGOING':
+                    this.isCheckmated = false;
+                    this.checkmateColor = '';
+                    this.gameResult = null;
+                    break;
+                // Add cases for resign, timeout, draw offers etc. if server sends them
+                default:
+                    console.log("Received game status:", gameState.gameStatus);
+            }
+        }
+        
+        // 5. 更新是否将军状态 (如果 ChessBoard 组件需要)
+        if (typeof gameState.isCheck !== 'undefined' && this.$refs.chessBoard) {
+            // this.$refs.chessBoard.showKingInCheck(gameState.isCheck, this.currentPlayer); // Example
+            if(gameState.isCheck) {
+                uni.showToast({ title: '将军!', icon: 'none', duration: 1500 });
+            }
+        }
+
+        // 6. 启动/切换计时器
+        if (!this.isCheckmated && this.gameResult === null) { // Only if game is ongoing
+            if (this.currentPlayer === 'white') {
+                this.startWhiteTimer();
+            } else if (this.currentPlayer === 'black') {
+                this.startBlackTimer();
+            }
+        } else {
+            this.stopAllTimers(); // Stop timers if game has ended
+        }
+        
+        // 7. 乐观更新的棋谱记录校正（如果需要）
+        // 如果之前是乐观记录棋谱，这里可以根据权威的 gameState.moveHistory 来校正
+        // this.formattedMoveHistory = parseAndFormatMoveHistory(gameState.moveHistory);
+        // For now, we assume recordMoveHistory in movePiece was optimistic and might be slightly off
+        // until the server state (which might contain full history) is processed.
+        // A simple approach: if this update corresponds to a move just made by the local player,
+        // ensure the last entry in formattedMoveHistory is correct.
+        // Or, if gameState includes a full formatted history, use that.
+        if (gameState.lastMoveVO && this.formattedMoveHistory.length > 0) {
+            const lastRecordedMove = this.formattedMoveHistory[this.formattedMoveHistory.length - 1];
+            const serverNotation = gameState.lastMoveVO.notation; // Assuming server sends notation
+
+            if (serverNotation) {
+                if (this.currentPlayer === 'black' && lastRecordedMove.white) { // Server just sent white's move
+                    // lastRecordedMove.white.notation = serverNotation;
+                     // It's more complex because current player is now black, meaning white just moved.
+                } else if (this.currentPlayer === 'white' && lastRecordedMove.black) { // Server just sent black's move
+                    // lastRecordedMove.black.notation = serverNotation;
+                }
+                 // This needs careful handling of whose move it was.
+                 // For simplicity, let's re-record based on current player *before* this update.
+                 // The this.currentPlayer is already updated to the *next* player.
+                 // So if current is black, white just moved.
+                 
+                 const pieceColorThatMoved = this.currentPlayer === 'white' ? 'black' : 'white';
+                 
+                 // Re-calculate notation and update based on server's move.
+                 // This is complex; a simpler way is if the server sends the full notation directly.
+                 // Or if server sends the move that was just made, re-calculate based on that.
+                 // For now, leave the optimistic notation from recordMoveHistory
+                 // unless server explicitly provides full history or corrected notation.
+            }
+        }
+
+        // Mark game as started if it wasn't already by client logic
+        if (!this.gameStarted && (gameState.gameStatus === 'ONGOING' || this.isCheckmated || this.gameResult)) {
+            this.gameStarted = true;
+        }
+        
+        // Force re-render if needed, though Vue should be reactive
+        this.$forceUpdate();
+      },
+      
+      // 新增：根据邀请ID获取游戏ID的方法
+      getGameIdFromInvitation(inviteId) {
+        if (!inviteId) {
+          console.error('获取游戏ID失败：inviteId为空');
+          return Promise.resolve(null);
+        }
+        
+        console.log('尝试从邀请ID获取游戏ID:', inviteId);
+        return getGameIdByInviteId(inviteId).then(res => {
+          if (res.success && res.result) {
+            // 根据API返回格式提取gameId
+            const gameId = res.result.id || res.result;
+            console.log('成功获取到游戏ID:', gameId);
+            return gameId;
+          } else {
+            console.error('获取游戏ID失败:', res.message);
+            return null;
+          }
+        }).catch(err => {
+          console.error('获取游戏ID异常:', err);
+          return null;
         });
       },
     }

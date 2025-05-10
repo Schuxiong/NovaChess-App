@@ -864,6 +864,65 @@
         }
       }
     },
+    "/pair/chessFriendPair/clearPendingInvitations" : {
+      "post" : {
+        "summary" : "对弈关系-清除待处理邀请",
+        "description" : "对弈关系-清除待处理邀请",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "key" : {
+                    "type" : "string"
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "成功标志",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "返回处理消息"
+                    },
+                    "code" : {
+                      "type" : "integer",
+                      "description" : "返回代码",
+                      "default" : 0
+                    },
+                    "result" : {
+                      "type" : "string",
+                      "description" : "返回数据对象 data\n返回数据对象"
+                    },
+                    "timestamp" : {
+                      "type" : "integer",
+                      "description" : "时间戳",
+                      "format" : "int64"
+                    }
+                  },
+                  "description" : ""
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/pair/chessFriendPair/queryPendingInvitations" : {
       "get" : {
         "summary" : "对弈关系-查询待接受的邀请",
@@ -871,7 +930,132 @@
         "parameters" : [ {
           "name" : "userId",
           "in" : "query",
-          "description" : "当前用户ID",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "成功标志",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "返回处理消息"
+                    },
+                    "code" : {
+                      "type" : "integer",
+                      "description" : "返回代码",
+                      "default" : 0
+                    },
+                    "result" : {
+                      "type" : "string",
+                      "description" : "返回数据对象 data\n返回数据对象"
+                    },
+                    "timestamp" : {
+                      "type" : "integer",
+                      "description" : "时间戳",
+                      "format" : "int64"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pair/chessFriendPair/respondInvitation" : {
+      "post" : {
+        "summary" : "对弈关系-接受或拒绝邀请",
+        "description" : "对弈关系-接受或拒绝邀请",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "query",
+          "description" : "邀请ID",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "status",
+          "in" : "query",
+          "description" : "1-接受，2-拒绝",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "nullable" : false
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "成功标志",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "返回处理消息"
+                    },
+                    "code" : {
+                      "type" : "integer",
+                      "description" : "返回代码",
+                      "default" : 0
+                    },
+                    "result" : {
+                      "type" : "string",
+                      "description" : "返回数据对象 data\n返回数据对象"
+                    },
+                    "timestamp" : {
+                      "type" : "integer",
+                      "description" : "时间戳",
+                      "format" : "int64"
+                    }
+                  },
+                  "description" : ""
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pair/chessFriendPair/getInvitationStatus" : {
+      "get" : {
+        "summary" : "对弈关系-查询邀请状态",
+        "description" : "对弈关系-查询邀请状态",
+        "parameters" : [ {
+          "name" : "sourceUserId",
+          "in" : "query",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "nullable" : false
+          }
+        }, {
+          "name" : "acceptUserId",
+          "in" : "query",
+          "description" : "",
           "required" : true,
           "schema" : {
             "type" : "string",
@@ -918,29 +1102,25 @@
         }
       }
     },
-    "/pair/chessFriendPair/respondInvitation" : {
+    "/pair/chessFriendPair/cancelInvitation" : {
       "post" : {
-        "summary" : "对弈关系-接受或拒绝邀请",
-        "description" : "对弈关系-接受或拒绝邀请",
-        "parameters" : [ {
-          "name" : "id",
-          "in" : "query",
-          "description" : "邀请ID",
-          "required" : true,
-          "schema" : {
-            "type" : "string",
-            "nullable" : false
+        "summary" : "对弈关系-取消邀请",
+        "description" : "对弈关系-取消邀请",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "key" : {
+                    "type" : "string"
+                  }
+                },
+                "description" : "请求参数 {\"id\": \"邀请ID\"}"
+              }
+            }
           }
-        }, {
-          "name" : "status",
-          "in" : "query",
-          "description" : "1-接受，2-拒绝",
-          "required" : true,
-          "schema" : {
-            "type" : "integer",
-            "nullable" : false
-          }
-        } ],
+        },
         "responses" : {
           "200" : {
             "description" : "",
