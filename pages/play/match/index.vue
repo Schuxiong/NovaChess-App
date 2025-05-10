@@ -106,12 +106,6 @@
         </view>
         
         <!-- 测试按钮 - 用于开始对战并显示对战Tab -->
-        <view class="debug-tools" v-if="!gameStarted">
-          <view class="start-match-btn" @click="startMatchAndShowTab">开始对战</view>
-          <view class="test-invitation-btn" @click="testInvitation('LucTestAccount')">测试邀请弹窗</view>
-          <view class="gen-url-btn" @click="generateTestInvitationUrl">生成测试URL</view>
-          <view class="set-test-id-btn" @click="setTestUserIdAndQuery">使用测试ID查询邀请</view>
-        </view>
         </view>
         
       <!-- 添加返回首页按钮 -->
@@ -826,10 +820,16 @@
           return false;
         }
         
-        // 从位置字符串解析行列
-        const fromCol = this.columns.indexOf(fromPos[0]);
+        // 确保fromPos和toPos是字符串格式，例如"e2"和"e4"
+        if (typeof fromPos !== 'string' || typeof toPos !== 'string') {
+          console.error('无效的棋子位置格式:', fromPos, toPos);
+          return false;
+        }
+        
+        // 从位置字符串解析行列（参考棋盘坐标系统）
+        const fromCol = this.columns.indexOf(fromPos[0].toLowerCase());
         const fromRow = 8 - parseInt(fromPos[1]);
-        const toCol = this.columns.indexOf(toPos[0]);
+        const toCol = this.columns.indexOf(toPos[0].toLowerCase());
         const toRow = 8 - parseInt(toPos[1]);
         
         if (fromCol === -1 || toCol === -1 || fromRow < 0 || fromRow > 7 || toRow < 0 || toRow > 7) {
@@ -853,44 +853,61 @@
           return false;
         }
         
-        // 这里逻辑调整：
-        // 1. 构建移动信息
-        // 2. 通过WebSocket发送移动请求
-        // 3. 不再直接更新本地棋盘，等待服务器确认后更新
+        console.log('棋子移动:', fromPos, '→', toPos);
         
-        // 构建移动信息
-        const moveInfo = {
-          fromPosition: fromPos,
-          toPosition: toPos,
-          promoteTo: promoteTo,
-          playerId: this.currentUserId,
-          playerName: this.playerName || `玩家_${this.currentUserId}`,
-          gameId: this.currentGameId
+        // 根据后端API需要的格式构建请求对象
+        
+        // 1. ChessMoveRequestVO 使用坐标值对象
+        const moveRequest = {
+          gameId: String(this.currentGameId),
+          userId: String(this.currentUserId),
+          fromPosition: {
+            // 从e2这样的表示转换为坐标值
+            x: fromCol,         // 列号 0-7
+            y: fromRow          // 行号 0-7
+          },
+          toPosition: {
+            x: toCol,           // 列号 0-7
+            y: toRow            // 行号 0-7
+          },
+          promotionPieceType: promoteTo ? promoteTo.toUpperCase() : null
         };
         
-        console.log('发送走棋信息:', moveInfo);
+        // 2. 或者使用国际象棋代数记号字符串(根据后端API的实际期望选择)
+        const moveRequestAlt = {
+          gameId: String(this.currentGameId),
+          userId: String(this.currentUserId),
+          fromPosition: fromPos,     // 例如"e2"
+          toPosition: toPos,         // 例如"e4"
+          promotionPieceType: promoteTo ? promoteTo.toUpperCase() : null
+        };
+        
+        // 根据后端期望使用正确的格式 - 默认使用第一种
+        const finalRequest = moveRequest;
+        
+        console.log('发送走棋信息:', finalRequest);
         
         // 通过WebSocket发送移动消息
         if (this.webSocketService.stompClient && this.currentGameId) {
-          // 棋盘移动的声音
-          this.playChessSound('move');
-          
-          // 发送移动消息到服务器
-          const destination = `/app/game/move/${this.currentGameId}`;
-          
-          sendMessage(destination, moveInfo)
-            .then(() => {
-              console.log('走棋消息发送成功');
-            })
-            .catch(error => {
-              console.error('发送走棋消息失败:', error);
-              uni.showToast({
-                title: '走棋失败，请重试',
-                icon: 'none'
-              });
-            });
+          try {
+            // 发送移动消息到服务器
+            const destination = `/app/movepieces`; // 使用正确的端点
             
-          return true;
+            sendMessage(destination, finalRequest);
+            console.log('走棋消息发送成功');
+            
+            // 播放走棋声音
+            this.playChessSound && this.playChessSound('move');
+            
+            return true;
+          } catch (error) {
+            console.error('发送走棋消息失败:', error);
+            uni.showToast({
+              title: '走棋失败，请重试',
+              icon: 'none'
+            });
+            return false;
+          }
         } else {
           console.error('WebSocket客户端未初始化或缺少游戏ID，无法发送走棋消息');
           uni.showToast({
@@ -898,6 +915,44 @@
             icon: 'none'
           });
           return false;
+        }
+      },
+      
+      // 播放棋子声音 (如果方法不存在，添加此方法)
+      playChessSound(soundType) {
+        // 检查是否有音效系统
+        if (!this.chessAudio) {
+          // 创建音频实例
+          this.chessAudio = {};
+        }
+        
+        let audioSrc = '';
+        switch(soundType) {
+          case 'move':
+            audioSrc = '/static/audio/move.mp3';
+            break;
+          case 'capture':
+            audioSrc = '/static/audio/capture.mp3';
+            break;
+          case 'check':
+            audioSrc = '/static/audio/check.mp3';
+            break;
+          default:
+            audioSrc = '/static/audio/move.mp3';
+        }
+        
+        try {
+          // 使用uniapp的音频API
+          const audio = uni.createInnerAudioContext();
+          audio.src = audioSrc;
+          audio.play();
+          
+          // 播放完自动释放
+          audio.onEnded(() => {
+            audio.destroy();
+          });
+        } catch (e) {
+          console.warn('播放音效失败:', e);
         }
       },
       
@@ -1187,6 +1242,10 @@
           getInvitationStatus(this.currentUserId, acceptUserId).then(res => {
             console.log('获取邀请状态结果:', res);
             if (res.success && res.result) {
+              // 添加2秒延迟后再获取游戏ID
+              setTimeout(() => {
+                this.getGameIdFromInvitation(res.result.inviteId);
+              }, 3000);
               const invite = res.result;
               
               // 检查邀请状态 - 1或2都表示已接受，需要进入游戏
@@ -1215,35 +1274,35 @@
                   if (gameId) {
                     console.log('已从邀请获取游戏ID:', gameId);
                     this.currentGameId = gameId;
+                
+                // 发起方直接进入游戏 - 游戏已由接收方初始化
+                enterGame().then(enterRes => {
+                  console.log('发起方进入游戏结果:', enterRes);
+                  if (enterRes.success) {
+                    console.log('发起方成功进入游戏');
                     
-                    // 发起方直接进入游戏 - 游戏已由接收方初始化
-                    enterGame().then(enterRes => {
-                      console.log('发起方进入游戏结果:', enterRes);
-                      if (enterRes.success) {
-                        console.log('发起方成功进入游戏');
-                        
-                        // 开始计时
-                        this.startWhiteTimer();
-                        
+                    // 开始计时
+                    this.startWhiteTimer();
+                    
                         // 初始化WebSocket连接
                         this.initWebSocket(this.currentGameId);
-                        
-                        uni.showToast({
-                          title: `对局已开始，您执${this.playAs === 'white' ? '白' : '黑'}子`,
-                          icon: 'success'
-                        });
-                      } else {
-                        uni.showToast({
-                          title: enterRes.message || '进入游戏失败',
-                          icon: 'none'
-                        });
-                      }
-                    }).catch(err => {
-                      console.error('进入游戏失败', err);
-                      uni.showToast({
-                        title: '进入游戏失败，请重试',
-                        icon: 'none'
-                      });
+                    
+                    uni.showToast({
+                      title: `对局已开始，您执${this.playAs === 'white' ? '白' : '黑'}子`,
+                      icon: 'success'
+                    });
+                  } else {
+                    uni.showToast({
+                      title: enterRes.message || '进入游戏失败',
+                      icon: 'none'
+                    });
+                  }
+                }).catch(err => {
+                  console.error('进入游戏失败', err);
+                  uni.showToast({
+                    title: '进入游戏失败，请重试',
+                    icon: 'none'
+                  });
                     });
                   } else {
                     console.error('无法获取游戏ID，无法建立WebSocket连接');
@@ -2185,15 +2244,22 @@
       // 处理兵升变
       handlePromotion(move) {
         const { from, to, promoteTo } = move;
+        
+        // 转换为棋盘标准表示法
+        const fromPos = this.columns[from.col] + (8 - from.row);
+        const toPos = this.columns[to.col] + (8 - to.row);
+        
         // 完成升变
-        this.movePiece(from.row, from.col, to.row, to.col, { 
-          promoteTo: promoteTo,
-          isPromotion: true
-        });
+        this.movePiece(fromPos, toPos, promoteTo);
       },
       
       // 处理棋盘格子点击
       handleCellClick(position) {
+        // 如果游戏未开始或已结束，不处理点击
+        if (!this.gameStarted || this.gameResult || this.isCheckmated) {
+          return;
+        }
+
         const { row, col } = position;
         const piece = this.chessboard[row][col];
         
@@ -2209,21 +2275,16 @@
           // 如果点击的是有效移动位置，执行移动
           const validMove = this.validMoves.find(move => move.row === row && move.col === col);
           if (validMove) {
-            // 检查是否有特殊移动属性
-            const moveInfo = {};
+            // 转换为棋盘标准表示法（如"e2"到"e4"）
+            const fromPos = this.columns[this.selectedPosition.col] + (8 - this.selectedPosition.row);
+            const toPos = this.columns[col] + (8 - row);
             
-            if (validMove.isCastling) {
-              moveInfo.isCastling = true;
-              moveInfo.rookFrom = validMove.rookFrom;
-              moveInfo.rookTo = validMove.rookTo;
-            } else if (validMove.isEnPassant) {
-              moveInfo.isEnPassant = true;
-              moveInfo.capturedPiecePos = validMove.capturedPiecePos;
-              console.log('执行吃过路兵移动，被吃子位置:', validMove.capturedPiecePos);
-            }
+            console.log(`尝试移动: ${fromPos} → ${toPos}`);
             
             // 执行移动
-            this.movePiece(this.selectedPosition.row, this.selectedPosition.col, row, col, moveInfo);
+            this.movePiece(fromPos, toPos);
+            
+            // 清除选择状态
             this.selectedPosition = null;
             this.validMoves = [];
             return;
@@ -2528,6 +2589,9 @@
           return;
         }
         
+        // 确保gameId是字符串类型
+        const gameIdStr = String(gameId);
+        
         if (!this.currentUserId) {
           console.error('初始化WebSocket失败: 缺少用户ID');
           return;
@@ -2547,7 +2611,7 @@
         this.webSocketService.gameSubscription = null;
         
         // 连接WebSocket
-        console.log(`尝试连接WebSocket，用户ID: ${this.currentUserId}，游戏ID: ${gameId}`);
+        console.log(`尝试连接WebSocket，用户ID: ${this.currentUserId}，游戏ID: ${gameIdStr}`);
         
         connectWebSocket(
           this.currentUserId,
@@ -2556,37 +2620,48 @@
             this.webSocketService.stompClient = client;
             
             // 保存当前订阅的游戏ID
-            this.webSocketService.gameIdForSubscription = gameId;
+            this.webSocketService.gameIdForSubscription = gameIdStr;
             
             // 订阅游戏主题以接收更新
-            const gameTopic = `/topic/game/${gameId}`;
-            
+            const gameTopic = `/topic/game/${gameIdStr}`;
             console.log(`订阅游戏主题: ${gameTopic}`);
             
             this.webSocketService.gameSubscription = subscribeToTopic(
               gameTopic,
               (message) => {
+                console.log('收到游戏主题消息:', message);
                 try {
-                  // 尝试解析消息
-                  const data = JSON.parse(message.body);
-                  console.log('WebSocket收到消息:', data);
-                  
-                  // 处理消息
-                  this.handleWebSocketMessage(data);
+                  this.handleWebSocketMessage(message);
                 } catch (e) {
                   console.error('处理WebSocket消息时出错:', e, message);
                 }
               }
             );
             
+            // 订阅棋盘主题以接收棋盘状态
+            const chessboardTopic = `/topic/chessboard`;
+            console.log(`订阅棋盘主题: ${chessboardTopic}`);
+            
+            subscribeToTopic(
+              chessboardTopic,
+              (message) => {
+                console.log('收到棋盘状态消息:', message);
+                if (message && message.success !== false && message.result) {
+                  this.updateGameViewFromServer(message.result);
+                }
+              }
+            );
+            
+            // 请求初始棋盘信息
+            this.requestInitialChessboard(gameIdStr);
+            
             // 发送PLAYER_JOINED消息通知其他玩家
             console.log('向服务器发送玩家加入消息');
-            
-            const destination = `/app/game/join/${gameId}`;
+            const destination = `/app/game/join/${gameIdStr}`;
             sendMessage(destination, {
-              gameId: gameId,
-              userId: this.currentUserId,
-              username: this.playerName || '玩家_' + this.currentUserId,
+              gameId: gameIdStr,
+              userId: String(this.currentUserId),
+              username: this.playerName || `玩家_${this.currentUserId}`,
               playerColor: this.playAs
             });
           },
@@ -2599,6 +2674,25 @@
             });
           }
         );
+      },
+      
+      // 请求初始棋盘信息
+      requestInitialChessboard(gameId) {
+        if (!gameId || !this.webSocketService.stompClient) {
+          console.error('请求初始棋盘失败: 缺少gameId或WebSocket未连接');
+          return;
+        }
+        
+        console.log(`请求初始棋盘信息，游戏ID: ${gameId}, 用户ID: ${this.currentUserId}`);
+        
+        try {
+          sendMessage("/app/chessboard", {
+            gameId: String(gameId),
+            userId: String(this.currentUserId)
+          });
+        } catch (e) {
+          console.error('请求初始棋盘信息失败:', e);
+        }
       },
     
       handleWebSocketMessage(message) {
@@ -2748,188 +2842,353 @@
         console.log('Updating game view from server state:', gameState);
 
         // 1. 更新棋盘 (this.chessboard)
-        //    您需要根据 ChessGameVO 的实际结构来转换。
-        //    假设 gameState.board (或 gameState.chessPieces) 是一个描述棋盘的对象或数组
-        //    例如: gameState.chessPieces = [{ piece: 'ROOK_WHITE', position: 'a1' }, ...]
-        //    或者 gameState.board = [ ['r','n','b','q','k','b','n','r'], ..., ['P','P',...] ] (fen-like row)
-        //    这里需要一个转换函数将服务器的棋盘表示映射到前端的 this.chessboard 格式
+        // 根据实际的后端数据结构处理棋盘数据
+        let boardUpdated = false;
         
-        if (gameState.boardVO && Array.isArray(gameState.boardVO)) { // 假设 boardVO 是二维数组
-            const newBoard = getInitialChessboard(); // Start with an empty board structure
-            const serverBoard = gameState.boardVO; // e.g. [ ["bR", "bN", ...], ..., ["wP", "wP", ...] ]
-                                                // or serverBoard could be a list of piece objects with positions
-            
-            // 假设服务器的 gameState.boardVO 是一个8x8的二维数组，
-            // 其中包含的元素是类似 "wP" (白兵), "bR" (黑车), "" (空格) 的字符串
-            // 或者更可能是包含棋子对象的列表，如 [{type: 'ROOK', color: 'BLACK', position: 'a8'}, ...]
-            // 您需要根据实际的 ChessGameVO.boardVO 结构来填充 this.chessboard
-            // 以下是一个示例性的转换，假设 gameState.boardVO 是一个棋子对象列表：
-            if (Array.isArray(gameState.pieces)) { // 假设 gameState.pieces 是 [{ type, color, position (e.g. 'e4')}]
-                const boardFromPieces = getInitialChessboard(); // Get a clean board
-                gameState.pieces.forEach(p => {
-                    const col = this.columns.indexOf(p.position.charAt(0).toLowerCase());
-                    const row = 8 - parseInt(p.position.charAt(1));
-                    if (row >=0 && row < 8 && col >=0 && col < 8) {
-                        boardFromPieces[row][col] = { 
-                            type: p.type.toLowerCase(), // 'pawn', 'rook', etc.
-                            color: p.color.toLowerCase(), // 'white', 'black'
-                            id: `${p.color.charAt(0).toLowerCase()}${p.type.charAt(0).toUpperCase()}_${p.position}` // simple id
-                        };
-                    }
-                });
-                this.chessboard = boardFromPieces;
-            } else if (Array.isArray(gameState.boardLayout)) { // 假设是二维数组 "wP", "bR"
-                 // 需要将 "wP" 转换为 { type: 'pawn', color: 'white', id: ... }
-                 const parsedBoard = gameState.boardLayout.map(r => r.map(cell => {
-                     if (!cell || cell.trim() === '') return null;
-                     const color = cell.charAt(0) === 'w' ? 'white' : 'black';
-                     const typeStr = cell.substring(1);
-                     let type = '';
-                     switch(typeStr) {
-                         case 'P': type = 'pawn'; break;
-                         case 'R': type = 'rook'; break;
-                         case 'N': type = 'knight'; break;
-                         case 'B': type = 'bishop'; break;
-                         case 'Q': type = 'queen'; break;
-                         case 'K': type = 'king'; break;
-                         default: return null;
-                     }
-                     return { type, color, id: `${color.charAt(0)}${type.charAt(0).toUpperCase()}_${Math.random()}` }; // Placeholder ID
-                 }));
-                 this.chessboard = parsedBoard;
-            } else {
-                 console.warn("ChessGameVO.boardVO or .pieces not in expected format, board not updated from WebSocket.");
-                 // Fallback or error: maybe request full board again if possible
-            }
+        // 尝试从各种可能的字段获取棋盘数据
+        if (gameState.boardVO && Array.isArray(gameState.boardVO)) {
+          // 如果有标准格式的boardVO
+          this.updateBoardFromBoardVO(gameState.boardVO);
+          boardUpdated = true;
+        } else if (gameState.pieces && Array.isArray(gameState.pieces)) {
+          // 尝试从pieces数组更新棋盘
+          this.updateBoardFromPieces(gameState.pieces);
+          boardUpdated = true;
+        } else if (gameState.boardLayout && Array.isArray(gameState.boardLayout)) {
+          // 尝试从boardLayout更新棋盘
+          this.updateBoardFromBoardLayout(gameState.boardLayout);
+          boardUpdated = true;
+        } else if (gameState.chess && gameState.chess.pieces) {
+          // 尝试从嵌套的chess.pieces字段更新
+          this.updateBoardFromPieces(gameState.chess.pieces);
+          boardUpdated = true;
+        } else if (gameState.chessBoard) {
+          // 尝试从chessBoard字段更新
+          this.updateBoardFromChessBoard(gameState.chessBoard);
+          boardUpdated = true;
+        } else if (gameState.chessPiecesList && Array.isArray(gameState.chessPiecesList)) {
+          // 新增：处理后端返回的chessPiecesList格式
+          this.updateBoardFromChessPiecesList(gameState.chessPiecesList);
+          boardUpdated = true;
         } else {
-            console.warn('ChessGameVO does not contain boardVO or it is not an array. Board not updated.');
+          console.warn('无法从服务器数据中找到有效的棋盘信息:', gameState);
+        }
+        
+        if (!boardUpdated) {
+          console.warn('无法更新棋盘，未找到兼容的棋盘数据结构');
         }
 
         // 2. 更新当前行棋方 (this.currentPlayer)
-        //    假设 gameState.currentTurn 是 'WHITE' 或 'BLACK' (字符串)
-        //    或者 gameState.currentTurnPlayerId
-        if (gameState.currentTurn) { // 'WHITE' or 'BLACK'
+        // 处理currentTurn为数值的情况(1表示黑，2表示白)
+        if (typeof gameState.currentTurn === 'number') {
+          switch (gameState.currentTurn) {
+            case 1:
+              this.currentPlayer = 'black';
+              break;
+            case 2:
+              this.currentPlayer = 'white';
+              break;
+            default:
+              console.warn('未知的currentTurn值:', gameState.currentTurn);
+          }
+        } else if (typeof gameState.currentTurn === 'string') {
+          // 如果是字符串格式，按原逻辑处理
           this.currentPlayer = gameState.currentTurn.toLowerCase();
-        } else if (gameState.currentPlayerId) {
-            // Map ID to color if necessary, e.g., if player1 is white and player2 is black
-            // This depends on how player IDs and colors are associated in your game state
-            // For now, let's assume a direct mapping if not 'WHITE'/'BLACK'
-            // this.currentPlayer = (gameState.currentPlayerId === this.playerInfo.id) ? this.playAs : (this.playAs === 'white' ? 'black' : 'white');
-            console.warn("currentPlayerId received, but logic to map to 'white'/'black' is needed based on game setup.");
+        } else if (gameState.currentHoldChess) {
+          // 尝试从currentHoldChess获取行棋方(1黑2白)
+          this.currentPlayer = gameState.currentHoldChess === 1 ? 'black' : 'white';
         } else {
-            console.warn('Current turn info missing in gameState.');
+          console.warn('无法确定当前行棋方，无法从currentTurn或currentHoldChess获取信息');
         }
 
         // 3. 更新上一部棋 (this.lastMove) - 用于棋盘高亮
-        //    假设 gameState.lastMove = { from: 'e2', to: 'e4', piece: { type: 'PAWN', color: 'WHITE' } }
-        if (gameState.lastMoveVO) { // Renamed from lastMove to lastMoveVO to match server side potential naming
-          const fromCol = this.columns.indexOf(gameState.lastMoveVO.fromPosition.charAt(0).toLowerCase());
-          const fromRow = 8 - parseInt(gameState.lastMoveVO.fromPosition.charAt(1));
-          const toCol = this.columns.indexOf(gameState.lastMoveVO.toPosition.charAt(0).toLowerCase());
-          const toRow = 8 - parseInt(gameState.lastMoveVO.toPosition.charAt(1));
-          
-          this.lastMove = {
-            from: { row: fromRow, col: fromCol },
-            to: { row: toRow, col: toCol },
-            piece: { // Assuming piece details are part of lastMoveVO or can be inferred
-              type: gameState.lastMoveVO.pieceMoved?.type?.toLowerCase() || '',
-              color: gameState.lastMoveVO.pieceMoved?.color?.toLowerCase() || ''
-            }
-          };
-        } else {
-          this.lastMove = null; // Clear if no last move info
+        if (gameState.lastMoveVO) {
+          this.updateLastMoveFromVO(gameState.lastMoveVO);
+        } else if (gameState.lastMove) {
+          this.updateLastMoveFromVO(gameState.lastMove);
         }
 
-        // 4. 更新游戏结果/状态 (this.gameResult, this.isCheckmated, this.checkmateColor)
-        if (gameState.gameStatus) { // e.g., "ONGOING", "CHECKMATE_WHITE_WINS", "STALEMATE"
-            switch (gameState.gameStatus) {
-                case 'CHECKMATE_WHITE_WINS':
-                    this.isCheckmated = true;
-                    this.checkmateColor = 'black'; // Black is checkmated
-                    this.gameResult = `${this.playAs === 'white' ? this.playerName : this.opponentName} 胜出 (将杀)`;
-                    this.handleGameEnd(this.playAs === 'white' ? 'victory' : 'defeat');
-                    break;
-                case 'CHECKMATE_BLACK_WINS':
-                    this.isCheckmated = true;
-                    this.checkmateColor = 'white'; // White is checkmated
-                    this.gameResult = `${this.playAs === 'black' ? this.playerName : this.opponentName} 胜出 (将杀)`;
-                    this.handleGameEnd(this.playAs === 'black' ? 'victory' : 'defeat');
-                    break;
-                case 'STALEMATE':
-                    this.gameResult = '和棋 (逼和)';
-                    this.handleGameEnd('draw');
-                    break;
-                case 'ONGOING':
-                    this.isCheckmated = false;
-                    this.checkmateColor = '';
-                    this.gameResult = null;
-                    break;
-                // Add cases for resign, timeout, draw offers etc. if server sends them
-                default:
-                    console.log("Received game status:", gameState.gameStatus);
-            }
-        }
+        // 4. 更新游戏结果/状态
+        this.updateGameStatusFromState(gameState);
         
-        // 5. 更新是否将军状态 (如果 ChessBoard 组件需要)
-        if (typeof gameState.isCheck !== 'undefined' && this.$refs.chessBoard) {
-            // this.$refs.chessBoard.showKingInCheck(gameState.isCheck, this.currentPlayer); // Example
-            if(gameState.isCheck) {
-                uni.showToast({ title: '将军!', icon: 'none', duration: 1500 });
-            }
-        }
-
-        // 6. 启动/切换计时器
-        if (!this.isCheckmated && this.gameResult === null) { // Only if game is ongoing
-            if (this.currentPlayer === 'white') {
-                this.startWhiteTimer();
-            } else if (this.currentPlayer === 'black') {
-                this.startBlackTimer();
-            }
-        } else {
-            this.stopAllTimers(); // Stop timers if game has ended
-        }
+        // 5. 更新计时器
+        this.updateTimersFromState(gameState);
         
-        // 7. 乐观更新的棋谱记录校正（如果需要）
-        // 如果之前是乐观记录棋谱，这里可以根据权威的 gameState.moveHistory 来校正
-        // this.formattedMoveHistory = parseAndFormatMoveHistory(gameState.moveHistory);
-        // For now, we assume recordMoveHistory in movePiece was optimistic and might be slightly off
-        // until the server state (which might contain full history) is processed.
-        // A simple approach: if this update corresponds to a move just made by the local player,
-        // ensure the last entry in formattedMoveHistory is correct.
-        // Or, if gameState includes a full formatted history, use that.
-        if (gameState.lastMoveVO && this.formattedMoveHistory.length > 0) {
-            const lastRecordedMove = this.formattedMoveHistory[this.formattedMoveHistory.length - 1];
-            const serverNotation = gameState.lastMoveVO.notation; // Assuming server sends notation
-
-            if (serverNotation) {
-                if (this.currentPlayer === 'black' && lastRecordedMove.white) { // Server just sent white's move
-                    // lastRecordedMove.white.notation = serverNotation;
-                     // It's more complex because current player is now black, meaning white just moved.
-                } else if (this.currentPlayer === 'white' && lastRecordedMove.black) { // Server just sent black's move
-                    // lastRecordedMove.black.notation = serverNotation;
-                }
-                 // This needs careful handling of whose move it was.
-                 // For simplicity, let's re-record based on current player *before* this update.
-                 // The this.currentPlayer is already updated to the *next* player.
-                 // So if current is black, white just moved.
-                 
-                 const pieceColorThatMoved = this.currentPlayer === 'white' ? 'black' : 'white';
-                 
-                 // Re-calculate notation and update based on server's move.
-                 // This is complex; a simpler way is if the server sends the full notation directly.
-                 // Or if server sends the move that was just made, re-calculate based on that.
-                 // For now, leave the optimistic notation from recordMoveHistory
-                 // unless server explicitly provides full history or corrected notation.
-            }
-        }
-
         // Mark game as started if it wasn't already by client logic
-        if (!this.gameStarted && (gameState.gameStatus === 'ONGOING' || this.isCheckmated || this.gameResult)) {
+        if (!this.gameStarted && (gameState.gameStatus === 'ONGOING' || gameState.gameStatus === 1 || this.isCheckmated || this.gameResult)) {
             this.gameStarted = true;
         }
         
         // Force re-render if needed, though Vue should be reactive
         this.$forceUpdate();
+      },
+      
+      // 从boardVO更新棋盘
+      updateBoardFromBoardVO(boardVO) {
+        // 假设boardVO是一个8x8二维数组
+        try {
+          this.chessboard = JSON.parse(JSON.stringify(boardVO));
+          return true;
+        } catch (e) {
+          console.error('解析boardVO时出错:', e);
+          return false;
+        }
+      },
+      
+      // 从棋子列表更新棋盘 
+      updateBoardFromPieces(pieces) {
+        try {
+          // 创建空棋盘
+          const newBoard = [];
+          for (let i = 0; i < 8; i++) {
+            newBoard[i] = Array(8).fill(null);
+          }
+          
+          // 填充棋子
+          pieces.forEach(p => {
+            // 假设格式为 {position: "e4", type: "PAWN", color: "WHITE"}
+            if (p.position && p.position.length >= 2) {
+              const col = this.columns.indexOf(p.position.charAt(0).toLowerCase());
+              const row = 8 - parseInt(p.position.charAt(1));
+              
+              if (row >= 0 && row < 8 && col >= 0 && col < 8) {
+                newBoard[row][col] = {
+                  type: p.type.toLowerCase(),
+                  color: p.color.toLowerCase(),
+                  id: `${p.color.charAt(0).toLowerCase()}${p.type.charAt(0).toUpperCase()}_${p.position}`
+                };
+              }
+            }
+          });
+          
+          this.chessboard = newBoard;
+          return true;
+        } catch (e) {
+          console.error('从pieces更新棋盘时出错:', e);
+          return false;
+        }
+      },
+      
+      // 从boardLayout更新棋盘
+      updateBoardFromBoardLayout(boardLayout) {
+        try {
+          // 假设boardLayout是二维数组，例如[["bR","bN",...],...]
+          const newBoard = boardLayout.map(row => row.map(cell => {
+            if (!cell || cell === '') return null;
+            
+            const color = cell.charAt(0) === 'w' ? 'white' : 'black';
+            const typeChar = cell.charAt(1);
+            let type = '';
+            
+            switch(typeChar) {
+              case 'P': type = 'pawn'; break;
+              case 'R': type = 'rook'; break;
+              case 'N': type = 'knight'; break;
+              case 'B': type = 'bishop'; break;
+              case 'Q': type = 'queen'; break;
+              case 'K': type = 'king'; break;
+              default: return null;
+            }
+            
+            return { 
+              type, 
+              color, 
+              id: `${color.charAt(0)}${type.charAt(0).toUpperCase()}_${Math.random().toString(36).substring(2, 8)}`
+            };
+          }));
+          
+          this.chessboard = newBoard;
+          return true;
+        } catch (e) {
+          console.error('从boardLayout更新棋盘时出错:', e);
+          return false;
+        }
+      },
+      
+      // 从chessBoard更新棋盘(可能是FEN字符串或其他格式)
+      updateBoardFromChessBoard(chessBoard) {
+        try {
+          // 如果是字符串，可能是FEN表示法
+          if (typeof chessBoard === 'string') {
+            // 简化的FEN解析，仅展示思路
+            const fenRows = chessBoard.split(' ')[0].split('/');
+            const newBoard = [];
+            
+            for (let i = 0; i < 8; i++) {
+              const boardRow = [];
+              let j = 0;
+              for (let c of fenRows[i]) {
+                if (c >= '1' && c <= '8') {
+                  // 数字表示连续的空格
+                  const emptyCount = parseInt(c);
+                  for (let k = 0; k < emptyCount; k++) {
+                    boardRow.push(null);
+                  }
+                  j += emptyCount;
+                } else {
+                  // 字母表示棋子
+                  const isUpper = c === c.toUpperCase();
+                  const color = isUpper ? 'white' : 'black';
+                  let type = '';
+                  
+                  switch(c.toUpperCase()) {
+                    case 'P': type = 'pawn'; break;
+                    case 'R': type = 'rook'; break;
+                    case 'N': type = 'knight'; break;
+                    case 'B': type = 'bishop'; break;
+                    case 'Q': type = 'queen'; break;
+                    case 'K': type = 'king'; break;
+                  }
+                  
+                  boardRow.push({
+                    type,
+                    color,
+                    id: `${color.charAt(0)}${type.charAt(0).toUpperCase()}_${i}_${j}`
+                  });
+                  j++;
+                }
+              }
+              newBoard.push(boardRow);
+            }
+            
+            this.chessboard = newBoard;
+            return true;
+          } else if (typeof chessBoard === 'object') {
+            // 其他可能的对象格式...
+            console.warn('未知的chessBoard对象格式:', chessBoard);
+            return false;
+          }
+          
+          return false;
+        } catch (e) {
+          console.error('从chessBoard更新棋盘时出错:', e);
+          return false;
+        }
+      },
+      
+      // 更新最后一步棋
+      updateLastMoveFromVO(lastMoveVO) {
+        try {
+          if (lastMoveVO.fromPosition && lastMoveVO.toPosition) {
+            // 格式为"e2"的情况
+            if (typeof lastMoveVO.fromPosition === 'string' && lastMoveVO.fromPosition.length >= 2) {
+              const fromCol = this.columns.indexOf(lastMoveVO.fromPosition.charAt(0).toLowerCase());
+              const fromRow = 8 - parseInt(lastMoveVO.fromPosition.charAt(1));
+              const toCol = this.columns.indexOf(lastMoveVO.toPosition.charAt(0).toLowerCase());
+              const toRow = 8 - parseInt(lastMoveVO.toPosition.charAt(1));
+              
+              if (fromCol >= 0 && toCol >= 0) {
+                this.lastMove = {
+                  from: { row: fromRow, col: fromCol },
+                  to: { row: toRow, col: toCol },
+                  piece: lastMoveVO.pieceMoved ? {
+                    type: lastMoveVO.pieceMoved.type?.toLowerCase() || '',
+                    color: lastMoveVO.pieceMoved.color?.toLowerCase() || ''
+                  } : { type: '', color: '' }
+                };
+              }
+            } 
+            // 其他格式的处理...
+          }
+        } catch (e) {
+          console.error('更新lastMove时出错:', e);
+          this.lastMove = null;
+        }
+      },
+      
+      // 更新游戏状态
+      updateGameStatusFromState(gameState) {
+        try {
+          // 游戏状态可能是字符串或数字
+          if (gameState.gameStatus) {
+            const status = gameState.gameStatus;
+            
+            // 如果是数字格式
+            if (typeof status === 'number') {
+              switch(status) {
+                case 1: // 假设1表示进行中
+                  this.isCheckmated = false;
+                  this.checkmateColor = '';
+                  this.gameResult = null;
+                  break;
+                case 2: // 假设2表示白方胜
+                  this.isCheckmated = true;
+                  this.checkmateColor = 'black'; // 黑方被将死
+                  this.gameResult = `${this.playAs === 'white' ? this.playerName : this.opponentName} 胜出 (将杀)`;
+                  this.handleGameEnd(this.playAs === 'white' ? 'victory' : 'defeat');
+                  break;
+                case 3: // 假设3表示黑方胜
+                  this.isCheckmated = true;
+                  this.checkmateColor = 'white'; // 白方被将死
+                  this.gameResult = `${this.playAs === 'black' ? this.playerName : this.opponentName} 胜出 (将杀)`;
+                  this.handleGameEnd(this.playAs === 'black' ? 'victory' : 'defeat');
+                  break;
+                case 4: // 假设4表示和棋
+                  this.gameResult = '和棋';
+                  this.handleGameEnd('draw');
+                  break;
+              }
+            } else if (typeof status === 'string') {
+              // 原来的字符串处理逻辑
+              switch(status) {
+                case 'ONGOING':
+                  this.isCheckmated = false;
+                  this.checkmateColor = '';
+                  this.gameResult = null;
+                  break;
+                case 'CHECKMATE_WHITE_WINS':
+                  this.isCheckmated = true;
+                  this.checkmateColor = 'black'; // 黑方被将死
+                  this.gameResult = `${this.playAs === 'white' ? this.playerName : this.opponentName} 胜出 (将杀)`;
+                  this.handleGameEnd(this.playAs === 'white' ? 'victory' : 'defeat');
+                  break;
+                case 'CHECKMATE_BLACK_WINS':
+                  this.isCheckmated = true;
+                  this.checkmateColor = 'white'; // 白方被将死
+                  this.gameResult = `${this.playAs === 'black' ? this.playerName : this.opponentName} 胜出 (将杀)`;
+                  this.handleGameEnd(this.playAs === 'black' ? 'victory' : 'defeat');
+                  break;
+                case 'STALEMATE':
+                  this.gameResult = '和棋 (逼和)';
+                  this.handleGameEnd('draw');
+                  break;
+              }
+            }
+          }
+        } catch (e) {
+          console.error('更新游戏状态时出错:', e);
+        }
+      },
+      
+      // 更新计时器
+      updateTimersFromState(gameState) {
+        try {
+          // 如果游戏结束，停止所有计时器
+          if (this.isCheckmated || this.gameResult) {
+            this.stopAllTimers();
+            return;
+          }
+          
+          // 根据当前行棋方启动对应的计时器
+          if (this.currentPlayer === 'white') {
+            this.startWhiteTimer();
+          } else if (this.currentPlayer === 'black') {
+            this.startBlackTimer();
+          }
+          
+          // 如果服务器提供了剩余时间信息，更新计时器
+          if (gameState.whiteTimeRemaining) {
+            this.playerTimeRemaining = this.playAs === 'white' ? gameState.whiteTimeRemaining : this.playerTimeRemaining;
+            this.opponentTimeRemaining = this.playAs === 'black' ? gameState.whiteTimeRemaining : this.opponentTimeRemaining;
+          }
+          
+          if (gameState.blackTimeRemaining) {
+            this.playerTimeRemaining = this.playAs === 'black' ? gameState.blackTimeRemaining : this.playerTimeRemaining;
+            this.opponentTimeRemaining = this.playAs === 'white' ? gameState.blackTimeRemaining : this.opponentTimeRemaining;
+          }
+        } catch (e) {
+          console.error('更新计时器时出错:', e);
+        }
       },
       
       // 新增：根据邀请ID获取游戏ID的方法
@@ -2954,6 +3213,80 @@
           console.error('获取游戏ID异常:', err);
           return null;
         });
+      },
+      
+      // 新增：从chessPiecesList更新棋盘
+      updateBoardFromChessPiecesList(chessPiecesList) {
+        try {
+          // 创建空棋盘
+          const newBoard = [];
+          for (let i = 0; i < 8; i++) {
+            newBoard[i] = Array(8).fill(null);
+          }
+          
+          console.log('开始从chessPiecesList填充棋盘，共有棋子:', chessPiecesList.length);
+          
+          // 遍历棋子列表填充棋盘
+          chessPiecesList.forEach(piece => {
+            if (piece.positionX && piece.positionY) {
+              // 确保字母大小写匹配
+              const positionX = piece.positionX.toLowerCase();
+              const col = this.columns.indexOf(positionX);
+              // 国际象棋棋盘的行号是从底部开始的，8对应索引0
+              const row = 8 - parseInt(piece.positionY);
+              
+              console.log(`处理棋子: ${piece.chessPiecesName}, 颜色: ${piece.piecesType}, 位置: ${positionX}${piece.positionY} -> 行${row}列${col}`);
+              
+              if (row >= 0 && row < 8 && col >= 0 && col < 8) {
+                // 根据piecesType确定棋子颜色：1为黑色，2为白色
+                const color = piece.piecesType === 1 ? 'black' : 'white';
+                
+                // 将chessPiecesName转换为前端使用的type小写格式
+                let type = '';
+                switch(piece.chessPiecesName.toLowerCase()) {
+                  case 'king': type = 'king'; break;
+                  case 'queen': type = 'queen'; break;
+                  case 'rook': type = 'rook'; break;
+                  case 'bishop': type = 'bishop'; break;
+                  case 'knight': type = 'knight'; break;
+                  case 'pawn': type = 'pawn'; break;
+                  default: type = piece.chessPiecesName.toLowerCase();
+                }
+                
+                newBoard[row][col] = {
+                  type: type,
+                  color: color,
+                  id: `${color.charAt(0)}${type.charAt(0).toUpperCase()}_${piece.id}`
+                };
+              } else {
+                console.error(`棋子位置超出棋盘范围: ${positionX}${piece.positionY} -> 行${row}列${col}`);
+              }
+            } else {
+              console.warn('棋子缺少位置信息:', piece);
+            }
+          });
+          
+          // 检查棋盘是否正确填充
+          let pieceCount = 0;
+          for (let i = 0; i < 8; i++) {
+            for (let j = 0; j < 8; j++) {
+              if (newBoard[i][j] !== null) {
+                pieceCount++;
+              }
+            }
+          }
+          console.log(`棋盘填充完成，共放置${pieceCount}个棋子，预期应有${chessPiecesList.length}个`);
+          
+          // 确认this.columns的值
+          console.log('columns数组:', this.columns);
+          
+          this.chessboard = newBoard;
+          console.log('成功从chessPiecesList更新棋盘');
+          return true;
+        } catch (e) {
+          console.error('从chessPiecesList更新棋盘时出错:', e);
+          return false;
+        }
       },
     }
   }
