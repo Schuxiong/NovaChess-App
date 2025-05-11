@@ -29,6 +29,7 @@
               :checkmate-color="checkmateColor"
               @cell-click="handleCellClick"
               @promotion-move="handlePromotion"
+              :key="JSON.stringify(chessboard)"
             />
           </view>
         
@@ -126,8 +127,10 @@
           <view v-if="isLeaderboardMode" class="rating-display">
             <text class="rating-label">当前积分</text>
             <view class="rating-value-container">
-              <text class="rating-value">{{ ratingChange ? ratingChange.before : 335 }}</text>
-              <text v-if="ratingChange" class="rating-change positive">+ {{ ratingChange.change }}</text>
+              <text class="rating-value">{{ ratingChange ? ratingChange.before : playerRating }}</text>
+              <text v-if="ratingChange && ratingChange.change > 0" class="rating-change positive">+ {{ ratingChange.change }}</text>
+              <text v-else-if="ratingChange && ratingChange.change < 0" class="rating-change negative">{{ ratingChange.change }}</text>
+              <text v-else-if="ratingChange" class="rating-change neutral">{{ ratingChange.change }}</text>
             </view>
           </view>
           
@@ -151,14 +154,16 @@
           <view v-if="isLeaderboardMode" class="rating-display">
             <text class="rating-label">当前积分</text>
             <view class="rating-value-container">
-              <text class="rating-value">{{ ratingChange ? ratingChange.before : 335 }}</text>
-              <text v-if="ratingChange" class="rating-change negative">{{ ratingChange.change }}</text>
+              <text class="rating-value">{{ ratingChange ? ratingChange.before : playerRating }}</text>
+              <text v-if="ratingChange && ratingChange.change > 0" class="rating-change positive">+ {{ ratingChange.change }}</text>
+              <text v-else-if="ratingChange && ratingChange.change < 0" class="rating-change negative">{{ ratingChange.change }}</text>
+              <text v-else-if="ratingChange" class="rating-change neutral">{{ ratingChange.change }}</text>
             </view>
           </view>
           
           <view class="result-actions">
-            <view class="action-btn primary-btn" @click="handleSummary">总结比赛</view>
-            <view class="action-btn secondary-btn" @click="handleNewGame">新的一局</view>
+            <view class="action-btn primary-btn" @click="handleRematch">再战一局</view>
+            <view class="action-btn secondary-btn" @click="backToHome">回到首页</view>
           </view>
           <view class="popup-close" @click="closeResultPopup">
             <uni-icons type="closeempty" size="24" color="#fff"></uni-icons>
@@ -170,22 +175,22 @@
       <uni-popup ref="drawPopup" type="center" background-color="#333" @close="handleResultClose">
         <view class="result-popup draw-popup">
           <view class="result-title">和棋</view>
-          <view class="result-description">这把是平局</view>
+          <view class="result-description">{{ gameResult || "双方同意和棋" }}</view>
           
           <!-- 天梯赛积分变化 -->
           <view v-if="isLeaderboardMode" class="rating-display">
             <text class="rating-label">当前积分</text>
             <view class="rating-value-container">
-              <text class="rating-value">{{ ratingChange ? ratingChange.before : 335 }}</text>
-              <text v-if="ratingChange" class="rating-change" :class="{'positive': ratingChange && ratingChange.change > 0, 'negative': ratingChange && ratingChange.change < 0}">
-                {{ ratingChange && ratingChange.change > 0 ? '+' : '' }}{{ ratingChange ? ratingChange.change : 0 }}
-              </text>
+              <text class="rating-value">{{ ratingChange ? ratingChange.before : playerRating }}</text>
+              <text v-if="ratingChange && ratingChange.change > 0" class="rating-change positive">+ {{ ratingChange.change }}</text>
+              <text v-else-if="ratingChange && ratingChange.change < 0" class="rating-change negative">{{ ratingChange.change }}</text>
+              <text v-else-if="ratingChange" class="rating-change neutral">{{ ratingChange.change }}</text>
             </view>
           </view>
           
           <view class="result-actions">
-            <view class="action-btn primary-btn" @click="handleSummary">总结比赛</view>
-            <view class="action-btn secondary-btn" @click="handleNewGame">新的一局</view>
+            <view class="action-btn primary-btn" @click="handleRematch">再战一局</view>
+            <view class="action-btn secondary-btn" @click="backToHome">回到首页</view>
           </view>
           <view class="popup-close" @click="closeResultPopup">
             <uni-icons type="closeempty" size="24" color="#fff"></uni-icons>
@@ -252,6 +257,8 @@
   import { initGame, moveChess, getChessMovesHistory, updateGameStatus, enterGame } from '@/api/game';
   // 导入用户API
   import { getUserData } from '@/api/system/user';
+  // 导入积分相关API
+  import { updatePlayerScore, addPlayerScoreRecord } from '@/api/score';
   
   // 导入WebSocket服务
   import { connectWebSocket, subscribeToTopic, sendMessage, disconnectWebSocket, unsubscribeFromTopic } from '@/utils/websocket.js';
@@ -437,6 +444,20 @@
       
       // 模拟监听好友邀请
       this.simulateInvitationListener();
+      
+      // 监控棋盘数据变化
+      this.$watch('chessboard', (newBoard, oldBoard) => {
+        console.log('棋盘数据已变化，新棋盘中的棋子数量:');
+        let count = 0;
+        for (let i = 0; i < 8; i++) {
+          for (let j = 0; j < 8; j++) {
+            if (newBoard[i][j] !== null) {
+              count++;
+            }
+          }
+        }
+        console.log(`棋盘上有${count}个棋子`);
+      }, { deep: true });
     },
     onReady() {
       console.log('页面就绪，启动邀请轮询');
@@ -846,7 +867,7 @@
         }
         
         // 检查是否是当前玩家的棋子
-        const pieceColor = getPieceColor(piece);
+        const pieceColor = piece.split('-')[0]; // 从'white-pawn'中提取'white'
         if ((this.playAs === 'white' && pieceColor !== 'white') ||
             (this.playAs === 'black' && pieceColor !== 'black')) {
           console.error('无法移动对手的棋子');
@@ -855,37 +876,17 @@
         
         console.log('棋子移动:', fromPos, '→', toPos);
         
-        // 根据后端API需要的格式构建请求对象
-        
-        // 1. ChessMoveRequestVO 使用坐标值对象
+        // 修改: 构建使用字母-数字坐标系统的请求对象
+        // 将数字坐标转回字母+数字格式
         const moveRequest = {
           gameId: String(this.currentGameId),
           userId: String(this.currentUserId),
-          fromPosition: {
-            // 从e2这样的表示转换为坐标值
-            x: fromCol,         // 列号 0-7
-            y: fromRow          // 行号 0-7
-          },
-          toPosition: {
-            x: toCol,           // 列号 0-7
-            y: toRow            // 行号 0-7
-          },
+          fromPosition: fromPos.toUpperCase(), // 例如"e2"转换为"E2"
+          toPosition: toPos.toUpperCase(),     // 例如"e4"转换为"E4"
           promotionPieceType: promoteTo ? promoteTo.toUpperCase() : null
         };
         
-        // 2. 或者使用国际象棋代数记号字符串(根据后端API的实际期望选择)
-        const moveRequestAlt = {
-          gameId: String(this.currentGameId),
-          userId: String(this.currentUserId),
-          fromPosition: fromPos,     // 例如"e2"
-          toPosition: toPos,         // 例如"e4"
-          promotionPieceType: promoteTo ? promoteTo.toUpperCase() : null
-        };
-        
-        // 根据后端期望使用正确的格式 - 默认使用第一种
-        const finalRequest = moveRequest;
-        
-        console.log('发送走棋信息:', finalRequest);
+        console.log('发送走棋信息:', moveRequest);
         
         // 通过WebSocket发送移动消息
         if (this.webSocketService.stompClient && this.currentGameId) {
@@ -893,7 +894,7 @@
             // 发送移动消息到服务器
             const destination = `/app/movepieces`; // 使用正确的端点
             
-            sendMessage(destination, finalRequest);
+            sendMessage(destination, moveRequest);
             console.log('走棋消息发送成功');
             
             // 播放走棋声音
@@ -908,7 +909,7 @@
             });
             return false;
           }
-        } else {
+          } else {
           console.error('WebSocket客户端未初始化或缺少游戏ID，无法发送走棋消息');
           uni.showToast({
             title: '网络连接中断，请重新连接',
@@ -1478,8 +1479,15 @@
             initGame(gameInitData).then(initRes => {
               console.log('游戏初始化结果:', initRes);
               if (initRes.success && initRes.result) {
-                // 保存游戏ID
-                this.currentGameId = initRes.result.id || initRes.result;
+                // 保存游戏ID - 更健壮的提取方式
+                let extractedGameId = null;
+                if (initRes.result && typeof initRes.result === 'object' && initRes.result.gameId) { // 检查 initRes.result.gameId
+                  extractedGameId = String(initRes.result.gameId); // 从 initRes.result.gameId 提取
+                } else if (initRes.result && typeof initRes.result === 'string') {
+                  // 如果initRes.result本身就是ID字符串
+                  extractedGameId = initRes.result;
+                }
+                this.currentGameId = extractedGameId;
                 console.log('接收方成功初始化游戏，ID:', this.currentGameId);
                 
                 // 开始计时
@@ -1487,22 +1495,30 @@
                 
                 // 初始化WebSocket连接
                 if (this.currentGameId) {
-                  this.initWebSocket(this.currentGameId);
+                  const gameIdStr = this.currentGameId; // currentGameId 已经是字符串或null
+                  this.initWebSocket(gameIdStr);
                   
                   // 发送一个GAME_START事件到WebSocket以通知发起方
-                  const destination = `/app/game/start/${this.currentGameId}`;
+                  const destination = `/app/game/start/${gameIdStr}`;
                   sendMessage(destination, {
-                    gameId: this.currentGameId,
+                    gameId: gameIdStr,
                     userId: this.currentUserId,
                     playerName: this.playerName,
                     playerColor: this.playAs
                   });
+
+                  uni.showToast({
+                    title: `对局已开始，您执${this.playAs === 'white' ? '白' : '黑'}子`,
+                    icon: 'success'
+                  });
+                } else {
+                  // 如果无法获取有效的gameId
+                  console.error('接收方未能从 initGame 响应中获取有效的游戏ID:', initRes.result);
+                  uni.showToast({
+                    title: '游戏创建失败，无法获取ID',
+                    icon: 'none'
+                  });
                 }
-                
-                uni.showToast({
-                  title: `对局已开始，您执${this.playAs === 'white' ? '白' : '黑'}子`,
-                  icon: 'success'
-                });
               } else {
                 uni.showToast({
                   title: initRes.message || '游戏初始化失败',
@@ -2629,6 +2645,7 @@
             this.webSocketService.gameSubscription = subscribeToTopic(
               gameTopic,
               (message) => {
+                console.log('【收到原始消息】:', JSON.stringify(message));
                 console.log('收到游戏主题消息:', message);
                 try {
                   this.handleWebSocketMessage(message);
@@ -2655,15 +2672,19 @@
             // 请求初始棋盘信息
             this.requestInitialChessboard(gameIdStr);
             
-            // 发送PLAYER_JOINED消息通知其他玩家
+            // 发送PLAYER_JOIN消息通知其他玩家 (仅发送一次)
             console.log('向服务器发送玩家加入消息');
-            const destination = `/app/game/join/${gameIdStr}`;
-            sendMessage(destination, {
+            const playerJoinMsg = {
               gameId: gameIdStr,
               userId: String(this.currentUserId),
               username: this.playerName || `玩家_${this.currentUserId}`,
-              playerColor: this.playAs
-            });
+              playerColor: this.playAs // 确保 playAs 已经基于游戏分配设置
+            };
+            const destination = `/app/game/join/${gameIdStr}`; // PLAYER_JOIN 消息的目的地
+            sendMessage(destination, playerJoinMsg);
+            
+            // 移除之前通过 setTimeout 多次发送 playerJoinMsg 和 GAME_START 的逻辑
+
           },
           (error) => {
             console.error('WebSocket连接错误:', error);
@@ -2704,39 +2725,29 @@
     
         // 根据后端实际发送的消息类型进行处理
         switch (message.type) {
-          case 'PLAYER_JOINED':
-            console.log(`WebSocket: 玩家 ${message.username} (ID: ${message.userId}) 加入游戏 ${message.gameId}`);
+          case 'PLAYER_JOIN':
+            console.log(`WebSocket: 玩家 ${message.payload.username} (ID: ${message.payload.userId}) 加入游戏 (gameId: ${this.currentGameId})`);
             // 更新对手信息等UI
-            if (message.userId !== this.currentUserId) {
-                this.opponentName = message.username || this.opponentName; // 更新对手名称
-                uni.showToast({ title: `玩家 ${message.username || '对手'} 加入游戏`, icon: 'none' });
+            if (message.payload.userId !== this.currentUserId) {
+                console.log('WebSocket: 对手加入游戏，更新对手信息', message.payload);
+                // 更新对手名称
+                this.opponentName = message.payload.username || this.opponentName; 
                 
-                // 重要：收到对手加入的通知，清除等待状态
-                if (this.gameStarted) {
-                    this.$nextTick(() => {
-                      // 通知组件更新UI状态
-                      this.$forceUpdate();
-                    });
-                }
-            }
-            break;
-            
-          case 'GAME_START': // 处理游戏开始消息
-            console.log('WebSocket: 收到游戏开始消息', message);
-            if (message.payload && message.payload.gameId) {
-                // 确认双方都已就绪
+                // 明确清除等待状态
                 this.gameStarted = true;
-                // 如果有初始游戏状态，更新棋盘
-                if (message.payload.initialGameState) {
-                    this.updateGameViewFromServer(message.payload.initialGameState);
-                }
                 
-                // 清除等待状态，强制更新UI
+                // 强制更新视图
                 this.$nextTick(() => {
-                    this.$forceUpdate();
+                  console.log('WebSocket: 强制更新UI显示对手信息');
+                  this.$forceUpdate();
                 });
                 
-                uni.showToast({ title: '对局已开始，双方都已就绪', icon: 'success' });
+                uni.showToast({ 
+                  title: `玩家 ${message.payload.username || '对手'} 已加入游戏`, 
+                  icon: 'none'
+                });
+            } else {
+                console.log('WebSocket: 收到自己加入游戏的消息，忽略UI更新');
             }
             break;
             
@@ -2815,6 +2826,37 @@
             }
             break;
             
+          // 新增: 处理GAME_OVER消息
+          case 'GAME_OVER': 
+            console.log('WebSocket: 收到GAME_OVER消息', message);
+            if (message.payload) {
+                const winner = message.payload.winner; // "BLACK" 或 "WHITE"
+                const reason = message.payload.reason; // "CHECKMATE", "RESIGNATION", "TIMEOUT" 等
+                
+                // 停止所有计时器
+                this.stopAllTimers();
+                
+                // 根据胜方决定结果类型
+                let resultType = 'draw'; // 默认为和棋
+                if (winner === 'WHITE' && this.playAs === 'white' || 
+                    winner === 'BLACK' && this.playAs === 'black') {
+                    resultType = 'victory';
+                    this.gameResult = `${this.playerName} 胜出 (${this.getReasonText(reason)})`;
+                } else if (winner !== 'DRAW') {
+                    resultType = 'defeat';
+                    this.gameResult = `${this.opponentName} 胜出 (${this.getReasonText(reason)})`;
+                } else {
+                    this.gameResult = '和棋';
+                }
+                
+                // 进行积分结算
+                this.calculateScoreChange(resultType, winner, reason).then(() => {
+                    // 显示结果弹窗
+                    this.showResultPopup(resultType);
+                });
+            }
+            break;
+            
           default:
             console.log('WebSocket: 未处理的消息类型', message.type);
         }
@@ -2839,11 +2881,13 @@
           console.error('updateGameViewFromServer: gameState is null or undefined');
           return;
         }
-        console.log('Updating game view from server state:', gameState);
+        console.log('[DEBUG] updateGameViewFromServer - Received gameState:', JSON.parse(JSON.stringify(gameState)));
+        console.log(`[DEBUG] updateGameViewFromServer - Before update: this.playAs=${this.playAs}, this.currentPlayer=${this.currentPlayer}`);
 
         // 1. 更新棋盘 (this.chessboard)
         // 根据实际的后端数据结构处理棋盘数据
         let boardUpdated = false;
+        let oldBoard = JSON.stringify(this.chessboard); // 保存更新前的棋盘状态
         
         // 尝试从各种可能的字段获取棋盘数据
         if (gameState.boardVO && Array.isArray(gameState.boardVO)) {
@@ -2876,6 +2920,31 @@
         
         if (!boardUpdated) {
           console.warn('无法更新棋盘，未找到兼容的棋盘数据结构');
+        } else {
+          // 棋盘更新后，验证数据
+          console.log('棋盘更新前的状态:', oldBoard);
+          console.log('棋盘更新后的状态:', JSON.stringify(this.chessboard));
+          
+          // 验证是否有棋子
+          let pieceCount = 0;
+          for (let i = 0; i < 8; i++) {
+            for (let j = 0; j < 8; j++) {
+              if (this.chessboard[i][j] !== null) {
+                pieceCount++;
+              }
+            }
+          }
+          console.log(`最终棋盘上有${pieceCount}个棋子`);
+          
+          // 手动触发组件更新
+          this.$nextTick(() => {
+            if (this.$refs.chessBoard) {
+              console.log('正在通知棋盘组件更新...');
+              this.$refs.chessBoard.$forceUpdate();
+            } else {
+              console.error('找不到棋盘组件引用!');
+            }
+          });
         }
 
         // 2. 更新当前行棋方 (this.currentPlayer)
@@ -2921,6 +2990,65 @@
         
         // Force re-render if needed, though Vue should be reactive
         this.$forceUpdate();
+
+        // 新增：处理轮到谁行棋的提示
+        this.checkPlayerTurn(gameState);
+
+        console.log(`[DEBUG] updateGameViewFromServer - After update: this.playAs=${this.playAs}, this.currentPlayer=${this.currentPlayer}`);
+      },
+      
+      // 新增: 判断当前轮次并显示对应提示
+      checkPlayerTurn(gameState) {
+        if (!gameState) return;
+        console.log('[DEBUG] checkPlayerTurn - Received gameState:', JSON.parse(JSON.stringify(gameState)));
+        
+        // 获取当前用户的棋子颜色和当前轮次
+        // gameState.currentHoldChess: 1表示黑，2表示白
+        // gameState.currentTurn: 1表示黑，2表示白
+        const myActualHoldChess = gameState.currentUserId === this.currentUserId ? gameState.currentHoldChess : (gameState.currentHoldChess === 1 ? 2 : 1);
+        const myChessColor = myActualHoldChess === 1 ? 'black' : 'white';
+        const currentTurnColor = gameState.currentTurn === 1 ? 'black' : 'white';
+        
+        // 判断是否是当前用户的回合
+        const isMyTurn = currentTurnColor === myChessColor;
+        
+        console.log(`[DEBUG] checkPlayerTurn - My User ID: ${this.currentUserId}, GameState User ID: ${gameState.currentUserId}`);
+        console.log(`[DEBUG] checkPlayerTurn - GameState: currentHoldChess=${gameState.currentHoldChess} (1黑2白), currentTurn=${gameState.currentTurn} (1黑2白)`);
+        console.log(`[DEBUG] checkPlayerTurn - Deduced: myActualHoldChess=${myActualHoldChess} (1黑2白) -> myChessColor='${myChessColor}', currentTurnColor='${currentTurnColor}', isMyTurn=${isMyTurn}`);
+        
+        // 显示对应提示
+        if (isMyTurn) {
+          // 是当前用户的回合，显示轮到您行棋的提示
+          uni.showToast({
+            title: '轮到您行棋',
+            icon: 'none',
+            duration: 1500
+          });
+          
+          // 启动玩家计时器
+          if (myChessColor === 'white') {
+            this.startWhiteTimer();
+          } else {
+            this.startBlackTimer();
+          }
+        } else {
+          // 不是当前用户的回合，显示等待对手行棋的提示
+          uni.showToast({
+            title: '等待对手行棋',
+            icon: 'none',
+            duration: 1500
+          });
+          
+          // 启动对手计时器
+          if (currentTurnColor === 'white') {
+            this.startWhiteTimer();
+          } else {
+            this.startBlackTimer();
+          }
+        }
+        
+        // 更新playAs属性，确保与服务器保持一致
+        this.playAs = myChessColor;
       },
       
       // 从boardVO更新棋盘
@@ -3253,11 +3381,11 @@
                   default: type = piece.chessPiecesName.toLowerCase();
                 }
                 
-                newBoard[row][col] = {
-                  type: type,
-                  color: color,
-                  id: `${color.charAt(0)}${type.charAt(0).toUpperCase()}_${piece.id}`
-                };
+                // 修改：使用ChessBoard组件期望的字符串格式，而不是对象
+                newBoard[row][col] = `${color}-${type}`;
+                
+                // 打印调试信息
+                console.log(`放置棋子: ${newBoard[row][col]} 在位置 [${row}][${col}]`);
               } else {
                 console.error(`棋子位置超出棋盘范围: ${positionX}${piece.positionY} -> 行${row}列${col}`);
               }
@@ -3287,6 +3415,197 @@
           console.error('从chessPiecesList更新棋盘时出错:', e);
           return false;
         }
+      },
+      
+      // 新增: 获取对应中文原因
+      getReasonText(reason) {
+        const reasonMap = {
+          'CHECKMATE': '将杀',
+          'RESIGNATION': '认输',
+          'TIMEOUT': '超时',
+          'STALEMATE': '逼和',
+          'DRAW_AGREEMENT': '和棋协议',
+          'FIFTY_MOVE_RULE': '五十回合规则',
+          'THREEFOLD_REPETITION': '三次重复'
+        };
+        return reasonMap[reason] || reason;
+      },
+      
+      // 新增: 计算积分变化
+      calculateScoreChange(resultType, winner, reason) {
+        // 如果不是排位赛，不计算积分
+        if (!this.isLeaderboardMode) {
+          return Promise.resolve();
+        }
+        
+        // 根据结果类型计算积分变化
+        let scoreChange = 0;
+        
+        switch(resultType) {
+          case 'victory':
+            // 胜利基础分15分，根据对手积分可能有额外加成
+            const baseWinPoints = 15;
+            const difficultyBonus = Math.max(0, Math.floor((this.opponentRating - this.playerRating) / 100));
+            scoreChange = baseWinPoints + difficultyBonus;
+            break;
+            
+          case 'defeat':
+            // 失败基础扣10分，根据对手积分可能有减免
+            const baseLossPoints = -10;
+            const skillGap = Math.min(5, Math.max(0, Math.floor((this.opponentRating - this.playerRating) / 150)));
+            scoreChange = baseLossPoints + skillGap; // 负数表示减分
+            break;
+            
+          case 'draw':
+            // 和棋积分变化较小
+            const ratingDiff = this.opponentRating - this.playerRating;
+            if (ratingDiff > 100) {
+              // 如果对手积分明显高，和棋算小胜，加少量分
+              scoreChange = 5;
+            } else if (ratingDiff < -100) {
+              // 如果对手积分明显低，和棋算小负，减少量分
+              scoreChange = -3;
+            } else {
+              // 实力相当，和棋不变分或微调
+              scoreChange = Math.floor(Math.random() * 3) - 1; // -1到1之间的随机数
+            }
+            break;
+        }
+        
+        // 保存当前分数和变化
+        this.ratingChange = {
+          before: this.playerRating,
+          after: this.playerRating + scoreChange,
+          change: scoreChange
+        };
+        
+        // 调用积分更新API
+        return this.updatePlayerScore(scoreChange);
+      },
+      
+      // 新增: 更新玩家积分
+      updatePlayerScore(scoreChange) {
+        if (!this.currentUserId || !this.currentGameId) {
+          console.error('无法更新积分: 缺少用户ID或游戏ID');
+          return Promise.resolve();
+        }
+        
+        // 1. 更新玩家总积分
+        const scoreUpdateData = {
+          userId: this.currentUserId,
+          userAccount: this.currentUserAccount,
+          score: this.playerRating + scoreChange
+        };
+        
+        // 2. 添加积分变化记录
+        const scoreRecordData = {
+          chessPlayerId: this.currentUserId,
+          chessGameId: this.currentGameId,
+          score: scoreChange
+        };
+        
+        return new Promise((resolve, reject) => {
+          // 1. 先更新积分总数
+          updatePlayerScore(scoreUpdateData)
+            .then(res => {
+              if (res.success) {
+                console.log('积分更新成功:', res);
+                
+                // 2. 添加积分记录
+                return addPlayerScoreRecord(scoreRecordData);
+              } else {
+                console.error('积分更新失败:', res.message);
+                return Promise.reject(res.message);
+              }
+            })
+            .then(recordRes => {
+              if (recordRes.success) {
+                console.log('积分记录添加成功:', recordRes);
+                
+                // 更新本地积分显示
+                this.playerRating += scoreChange;
+                
+                resolve();
+              } else {
+                console.error('积分记录添加失败:', recordRes.message);
+                reject(recordRes.message);
+              }
+            })
+            .catch(err => {
+              console.error('积分处理出错:', err);
+              // 即使有错误也继续显示结果界面
+              resolve();
+            });
+        });
+      },
+      
+      // 处理再战一局按钮
+      handleRematch() {
+        // 关闭结果弹窗
+        this.closeResultPopup();
+        
+        // 如果是好友对战模式
+        if (this.selectedOpponent) {
+          // 延迟一下再邀请
+          setTimeout(() => {
+            if (this.selectedOpponent) {
+              // 交换黑白棋色再邀请
+              const newPlayAs = this.playAs === 'white' ? 'black' : 'white';
+              
+              // 构造邀请信息
+              const inviteInfo = {
+                timeControl: this.timeControl,
+                playAs: newPlayAs,
+                gameMode: this.gameMode
+              };
+              
+              // 重新邀请同一位好友
+              this.inviteFriend(this.selectedOpponent, inviteInfo);
+            }
+          }, 300);
+        } 
+        // 如果是天梯赛模式
+        else if (this.isLeaderboardMode) {
+          // 重置界面并启动新的天梯匹配
+          this.resetForNewGame();
+          setTimeout(() => {
+            this.playLeaderboard();
+          }, 300);
+        } 
+        // 普通匹配模式
+        else {
+          // 重置界面并启动新的匹配
+          this.resetForNewGame();
+          this.startGame();
+        }
+      },
+
+      // 重置界面为新游戏状态
+      resetForNewGame() {
+        // 关闭结果弹窗
+        this.closeResultPopup();
+        
+        // 清除游戏结果和将军标记
+        this.gameResult = null;
+        this.isCheckmated = false;
+        this.checkmateColor = '';
+        
+        // 重置棋盘
+        this.resetBoard();
+        
+        // 重置计时器
+        this.playerTimeRemaining = 600; // 10分钟
+        this.opponentTimeRemaining = 600;
+        
+        // 停止所有计时器
+        this.stopAllTimers();
+        
+        // 重置WebSocket
+        this.disconnectWebSocketInternal();
+        
+        // 切换到新游戏标签页
+        this.activeTab = 'newGame';
+        this.gameStarted = false;
       },
     }
   }
@@ -3454,45 +3773,64 @@
   
   // 天梯赛结果弹窗中的积分变化样式
   .rating-display {
+    margin: 20rpx 0;
+    background-color: #333a46;
+    border-radius: 16rpx;
+    padding: 20rpx 30rpx;
+    width: 80%;
+  }
+  
+  .rating-label {
+    font-size: 26rpx;
+    color: #b0b8c8;
+    margin-bottom: 12rpx;
+    display: block;
+  }
+  
+  .rating-value-container {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    width: 90%;
-    margin: 20rpx 0 30rpx;
-    padding: 20rpx;
-    background-color: rgba(255, 255, 255, 0.1);
-    border-radius: 10rpx;
-    
-    .rating-label {
-      font-size: 30rpx;
-      color: #AAAAAA;
-      margin-bottom: 10rpx;
-    }
-    
-    .rating-value-container {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    
-    .rating-value {
-      font-size: 60rpx;
-      font-weight: bold;
-      color: #FFFFFF;
-    }
-    
-    .rating-change {
-      font-size: 52rpx;
-      font-weight: bold;
-      margin-left: 15rpx;
-      
-      &.positive {
-        color: #81B64C;
-      }
-      
-      &.negative {
-        color: #E53935;
-      }
-    }
+    justify-content: center;
+  }
+  
+  .rating-value {
+    font-size: 48rpx;
+    font-weight: bold;
+    color: #ffffff;
+  }
+  
+  .rating-change {
+    margin-left: 16rpx;
+    padding: 6rpx 16rpx;
+    border-radius: 20rpx;
+    font-size: 30rpx;
+    font-weight: bold;
+  }
+  
+  .rating-change.positive {
+    background-color: #4caf50;
+    color: #ffffff;
+  }
+  
+  .rating-change.negative {
+    background-color: #f44336;
+    color: #ffffff;
+  }
+  
+  .rating-change.neutral {
+    background-color: #607d8b;
+    color: #ffffff;
+  }
+  
+  /* 再战一局按钮 */
+  .action-btn.primary-btn {
+    background-color: #4e8ef7;
+    border: none;
+  }
+  
+  /* 回到首页按钮 */
+  .action-btn.secondary-btn {
+    background-color: #333a46;
+    border: 1px solid #4e8ef7;
   }
   </style>

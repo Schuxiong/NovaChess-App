@@ -74,6 +74,7 @@ export function subscribeToTopic(topic, callback) {
     const subscription = stompClient.subscribe(topic, (message) => {
       let parsedMessage = {};
       try {
+        console.log(`收到原始消息(${topic}):`, message.body);
         parsedMessage = JSON.parse(message.body);
       } catch (e) {
         console.error('无法解析收到的消息体:', message.body, e);
@@ -82,9 +83,22 @@ export function subscribeToTopic(topic, callback) {
       if (callback) callback(parsedMessage);
     });
     subscriptions[topic] = subscription; // 保存订阅对象，方便取消
+    console.log(`订阅成功: ${topic}, 订阅ID: ${subscription.id}`);
     return subscription;
   } else {
     console.error('STOMP 未连接，无法订阅 ' + topic);
+    // 尝试重新连接
+    console.log('尝试重新连接WebSocket...');
+    if (stompClient) {
+      stompClient.activate();
+      // 设置一个延迟任务，尝试在连接后订阅
+      setTimeout(() => {
+        if (stompClient && stompClient.connected) {
+          console.log(`重新连接后尝试订阅: ${topic}`);
+          subscribeToTopic(topic, callback);
+        }
+      }, 2000);
+    }
     return null;
   }
 }
@@ -101,14 +115,35 @@ export function unsubscribeFromTopic(topic) {
 // 发送消息
 export function sendMessage(destination, body) {
   if (stompClient && stompClient.connected) {
-    stompClient.publish({
-      destination: destination, // 例如: /app/game/move/{gameId}
-      body: JSON.stringify(body), // 消息体通常是 JSON 字符串
-      // headers: { priority: '9' } // 可选的 STOMP 消息头
-    });
-    console.log(`STOMP 消息已发送到 ${destination}:`, body);
+    try {
+      stompClient.publish({
+        destination: destination, // 例如: /app/game/move/{gameId}
+        body: JSON.stringify(body), // 消息体通常是 JSON 字符串
+        // headers: { priority: '9' } // 可选的 STOMP 消息头
+      });
+      console.log(`STOMP 消息已发送到 ${destination}:`, body);
+      return true;
+    } catch (e) {
+      console.error(`发送消息到 ${destination} 失败:`, e);
+      return false;
+    }
   } else {
     console.error('STOMP 未连接，无法发送消息到 ' + destination);
+
+    // 尝试重新连接
+    if (stompClient) {
+      console.log('尝试重新连接WebSocket并在连接后发送消息...');
+      stompClient.activate();
+      // 设置一个延迟任务，尝试在连接后发送
+      setTimeout(() => {
+        if (stompClient && stompClient.connected) {
+          console.log(`重新连接后尝试发送到: ${destination}`);
+          sendMessage(destination, body);
+        }
+      }, 2000);
+    }
+
+    return false;
   }
 }
 
