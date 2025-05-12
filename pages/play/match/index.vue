@@ -78,6 +78,7 @@
             <games-tab
               v-if="activeTab === 'games'"
               :games-list="gamesList"
+              :user-id="currentUserId"
             />
             
             <player-tab
@@ -1612,86 +1613,6 @@
         });
       },
       
-      // 开始轮询游戏行棋
-      startPollingGameMoves() {
-        // // 清除可能的现有定时器
-        // if (this.pollingGameMovesTimer) {
-        //   clearInterval(this.pollingGameMovesTimer);
-        // }
-        
-        // // 设置定时器，每2秒查询一次
-        // this.pollingGameMovesTimer = setInterval(() => {
-        //   this.checkGameMoves();
-        // }, 2000);
-        
-        // // 立即执行一次
-        // this.checkGameMoves();
-        console.log("startPollingGameMoves 已被WebSocket取代，不再执行。");
-      },
-      
-      // 停止轮询游戏行棋
-      stopPollingGameMoves() {
-        // if (this.pollingGameMovesTimer) {
-        //   clearInterval(this.pollingGameMovesTimer);
-        //   this.pollingGameMovesTimer = null;
-        // }
-        console.log("stopPollingGameMoves 已被WebSocket取代，不再执行。");
-      },
-      
-      // 查询游戏行棋
-      checkGameMoves() {
-        // if (!this.currentGameId) {
-        //   console.log('没有游戏ID，不查询行棋');
-        //   return;
-        // }
-        
-        // // 构造查询参数
-        // const params = {
-        //   chessGameId: this.currentGameId,
-        //   pageNo: 1,
-        //   pageSize: 50
-        // };
-        
-        // // 调用行棋列表API
-        // getChessMovesHistory(params).then(res => {
-        //   if (res.success && res.result && res.result.records) {
-        //     const moves = res.result.records;
-        //     console.log('获取到行棋记录:', moves.length, '条');
-            
-        //     if (moves.length > 0) {
-        //       // 排序确保按时间顺序
-        //       moves.sort((a, b) => {
-        //         const timeA = new Date(a.createTime || 0).getTime();
-        //         const timeB = new Date(b.createTime || 0).getTime();
-        //         return timeA - timeB;
-        //       });
-              
-        //       // 获取最新的行棋
-        //       const latestMove = moves[moves.length - 1];
-              
-        //       // 如果有新的行棋且不是自己的行棋
-        //       if (latestMove.id !== this.lastMoveId) {
-        //         console.log('发现新的行棋:', latestMove);
-        //         this.lastMoveId = latestMove.id;
-                
-        //         // 如果是对方行棋且当前是对方回合
-        //         const isMoveByOpponent = latestMove.createBy !== this.currentUserId;
-        //         const isOpponentTurn = (this.playAs === 'white' && this.currentPlayer === 'black') ||
-        //                               (this.playAs === 'black' && this.currentPlayer === 'white');
-                
-        //         if (isMoveByOpponent && isOpponentTurn) {
-        //           // 应用对方的行棋到棋盘
-        //           this.applyOpponentMove(latestMove);
-        //         }
-        //       }
-        //     }
-        //   }
-        // }).catch(err => {
-        //   console.error('查询行棋记录失败', err);
-        // });
-        console.log("checkGameMoves 已被WebSocket取代，不再执行。");
-      },
-      
       // 应用对方行棋到棋盘
       applyOpponentMove(moveData) {
         // 解析行棋数据
@@ -2073,25 +1994,6 @@
         
         return url;
       },
-      
-      // 调试功能 - 手动设置用户ID并查询邀请
-      setTestUserIdAndQuery() {
-        // 使用默认测试用户ID或从配置中获取
-        const testUserId = '1714471285016895490'; // 使用已知的有效用户ID
-        
-        // 存储测试用户ID
-        uni.setStorageSync('userId', testUserId);
-        console.log('已设置测试用户ID:', testUserId);
-        
-        // 强制查询一次邀请
-        this.checkPendingInvitations();
-        
-        uni.showToast({
-          title: '已使用测试ID查询邀请',
-          icon: 'none'
-        });
-      },
-      
       // 处理邀请弹窗关闭
       handleInvitationClose() {
         console.log('邀请弹窗关闭');

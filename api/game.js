@@ -61,4 +61,16 @@ export function updateGameStatus(data) {
     method: 'put',
     data
   })
+}
+
+/**
+ * 获取对局回放记录
+ * @param {String} gameId 游戏ID
+ * @returns {Promise}
+ */
+export function getGameReplayRecords(gameId) {
+  return request({
+    url: `/game/chessGame/replay/${gameId}`,
+    method: 'get'
+  })
 } 

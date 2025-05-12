@@ -154,6 +154,7 @@ import PlayerInfo from '@/components/chess/PlayerInfo.vue'
 import ReplayChessBoard from '@/components/chess/replay/ReplayChessBoard.vue'
 import TabBar from '@/components/TabBar.vue'
 import { getInitialChessboard } from '@/utils/chess/cheesLogic'
+import { getGameReplayRecords } from '@/api/game'
 
 export default {
   components: {
@@ -192,6 +193,7 @@ export default {
       playAs: 'white',
       isLiveMode: false,  // 是否是观看直播模式
       gameId: '',         // 游戏ID
+      liveUpdateTimer: null, // 直播更新定时器
     }
   },
   computed: {
@@ -227,10 +229,11 @@ export default {
       }
     }
   },
-  onLoad(options) {
+  created() {
     const systemInfo = uni.getSystemInfoSync()
     this.statusBarHeight = systemInfo.statusBarHeight
-    
+  },
+  onLoad(options) {
     // 获取传递的参数
     this.gameId = options.id || ''
     this.isLiveMode = options.live === 'true'
@@ -238,7 +241,29 @@ export default {
     // 加载对局数据
     this.loadGameData(this.gameId)
   },
+  onUnload() {
+    // 页面卸载时清理资源
+    this.clearResources();
+  },
   methods: {
+    // 清理资源
+    clearResources() {
+      // 清除定时器
+      if (this.liveUpdateTimer) {
+        clearInterval(this.liveUpdateTimer);
+        this.liveUpdateTimer = null;
+      }
+      
+      // 清除评估引擎
+      this.destroyStockfish();
+    },
+    
+    // 清理评估引擎资源
+    destroyStockfish() {
+      // 在这个简化版中没有实际的Stockfish实例需要清理
+      console.log('清理引擎资源');
+      this.stockfish = null;
+    },
     loadGameData(gameId) {
       console.log('加载对局数据:', gameId, '是否直播模式:', this.isLiveMode)
       
@@ -253,8 +278,117 @@ export default {
     },
     
     loadHistoryGameData(gameId) {
-      // 模拟加载历史对局数据
-      // 这里可以添加API请求，获取真实数据
+      // 显示加载中状态
+      uni.showLoading({
+        title: '加载对局数据...'
+      });
+      
+      console.log('加载对局回放数据, 游戏ID:', gameId);
+      
+      // 调用API获取历史对局数据
+      getGameReplayRecords(gameId)
+        .then(res => {
+          if (res.success && res.result) {
+            console.log('获取到对局回放数据:', res.result);
+            
+            // 处理对局基本信息
+            this.processGameInfo(gameId, res.result);
+            
+            // 处理行棋记录
+            this.processMovesData(res.result);
+            
+            // 初始化回放
+            this.initializeReplay();
+          } else {
+            console.warn('获取对局回放数据失败:', res.message || '未知错误');
+            // 使用模拟数据兜底
+            this.useMockData();
+          }
+        })
+        .catch(err => {
+          console.error('获取对局回放数据出错:', err);
+          // 使用模拟数据兜底
+          this.useMockData();
+        })
+        .finally(() => {
+          uni.hideLoading();
+        });
+    },
+    
+    // 处理对局基本信息
+    processGameInfo(gameId, movesData) {
+      // 从服务器返回的数据中提取对局基本信息
+      // 通常第一条行棋记录会包含游戏初始信息
+      
+      let player1Name = '玩家1';
+      let player2Name = '玩家2';
+      let player1Rating = 0;
+      let player2Rating = 0;
+      
+      // 如果有行棋记录，从中提取玩家信息
+      if (movesData && movesData.length > 0) {
+        const firstMove = movesData[0];
+        
+        // 提取玩家信息（根据实际数据结构调整）
+        if (firstMove.whitePlayerName) {
+          player1Name = firstMove.whitePlayerName;
+          player1Rating = firstMove.whitePlayerRating || 0;
+        }
+        
+        if (firstMove.blackPlayerName) {
+          player2Name = firstMove.blackPlayerName;
+          player2Rating = firstMove.blackPlayerRating || 0;
+        }
+      }
+      
+      // 设置游戏基本信息
+      this.game = {
+        id: gameId,
+        player1Name: player1Name,
+        player2Name: player2Name, 
+        player1Rating: player1Rating,
+        player2Rating: player2Rating,
+        player1Avatar: 'https://pic1.imgdb.cn/item/67f3c5c7e381c3632bee8ff9.png',
+        player2Avatar: 'https://pic1.imgdb.cn/item/67f3c5c7e381c3632bee8ff9.png',
+        player1Time: '10:00', // 初始时间，后续可根据实际数据更新
+        player2Time: '10:00',
+        moves: [] // 移动记录，将在processMovesData中填充
+      };
+    },
+    
+    // 处理行棋记录数据
+    processMovesData(movesData) {
+      if (!movesData || !Array.isArray(movesData)) {
+        console.warn('无效的行棋记录数据');
+        return;
+      }
+      
+      // 转换服务器返回的行棋记录为前端需要的格式
+      this.game.moves = movesData.map(moveData => {
+        // 根据实际数据结构解析moveData
+        // 这里假设moveData是服务器返回的一条行棋记录
+        
+        let notation = moveData.chessNotation || 'e4'; // 棋谱记录
+        let from = moveData.fromPosition || 'e2'; // 起始位置
+        let to = moveData.toPosition || 'e4'; // 目标位置
+        let time = moveData.moveTime || 1.0; // 耗时
+        let evaluation = moveData.evaluation || 0; // 评估值
+        
+        return {
+          notation,
+          from,
+          to,
+          time,
+          evaluation
+        };
+      });
+      
+      console.log('处理后的行棋记录:', this.game.moves);
+    },
+    
+    // 使用模拟数据（当API请求失败时使用）
+    useMockData() {
+      console.log('使用模拟数据');
       this.game = {
         player1Name: 'NikoTheodo',
         player2Name: 'theloyalwolf',
@@ -269,37 +403,8 @@ export default {
           { notation: 'c5', from: 'c7', to: 'c5', time: 0.8, evaluation: 0.1 },
           { notation: 'Nf3', from: 'g1', to: 'f3', time: 1.5, evaluation: 0.4 }
         ]
-      }
-      this.initializeReplay()
-    },
-    
-    loadLiveGameData(gameId) {
-      // 模拟加载直播数据
-      // 这里可以添加WebSocket连接，实时获取对局数据
-      this.game = {
-        player1Name: 'NikoTheodo',
-        player2Name: 'theloyalwolf',
-        player1Rating: 3072,
-        player2Rating: 2952,
-        player1Avatar: 'https://pic1.imgdb.cn/item/67f3c5c7e381c3632bee8ff9.png',
-        player2Avatar: 'https://pic1.imgdb.cn/item/67f3c5c7e381c3632bee8ff9.png',
-        player1Time: '3:45',
-        player2Time: '4:12',
-        moves: [
-          { notation: 'e4', from: 'e2', to: 'e4', time: 1.2, evaluation: 0.3 },
-          { notation: 'c5', from: 'c7', to: 'c5', time: 0.8, evaluation: 0.1 }
-        ]
-      }
-      this.initializeReplay()
-      
-      // 设置模拟的实时数据更新
-      if (this.isLiveMode) {
-        setTimeout(() => {
-          console.log('模拟新的棋步')
-          this.game.moves.push({ notation: 'Nf3', from: 'g1', to: 'f3', time: 1.5, evaluation: 0.4 })
-          this.jumpToMove(this.game.moves.length - 1)
-        }, 5000)
-      }
+      };
+      this.initializeReplay();
     },
     toggleEvaluation(e) {
       this.showEvaluation = e.detail.value
@@ -309,56 +414,116 @@ export default {
       return eval_value > 0 ? '+' + eval_value.toFixed(1) : eval_value.toFixed(1)
     },
     initializeReplay() {
-      this.currentMoveIndex = -1
-      this.boardState = getInitialChessboard()
-      this.currentMove = null
-      this.currentPlayer = 'white'
-      this.evaluation = 0
-      this.currentOpeningName = '开局阶段'
+      // 重置棋盘和状态
+      this.boardState = getInitialChessboard();
+      this.currentMoveIndex = -1;
+      this.currentMove = null;
+      this.currentPlayer = 'white';
+      this.evaluation = 0;
+      this.currentOpeningName = '开局阶段';
       
       // 加载开局库
-      this.loadOpeningDatabase()
+      this.loadOpeningDatabase();
+      
+      console.log('回放初始化完成');
     },
     jumpToMove(index) {
-      this.currentMoveIndex = index
-      
-      // 更新棋盘状态
-      if (index >= 0) {
-        const move = this.game.moves[index]
-        this.currentMove = {
-          from: { row: move.from[1] - 1, col: move.from.charCodeAt(0) - 97 },
-          to: { row: move.to[1] - 1, col: move.to.charCodeAt(0) - 97 }
-        }
-        
-        // 更新评估值
-        this.updateEvaluation(index)
-        
-        // 更新开局名称
-        if (index < 10) { // 只在前10步尝试识别开局
-          this.identifyOpening(this.currentFen)
-        }
-      } else {
-        this.evaluation = 0
-        this.currentOpeningName = '开局阶段'
+      // 重置棋盘到初始状态
+      if (index < 0 || index >= this.game.moves.length) {
+        this.currentMoveIndex = -1;
+        this.boardState = getInitialChessboard();
+        this.currentMove = null;
+        this.currentPlayer = 'white';
+        this.evaluation = 0;
+        return;
       }
       
-      this.currentPlayer = index % 2 === 0 ? 'black' : 'white'
+      // 如果是向前跳转，需要重新初始化棋盘然后依次执行到目标步骤
+      if (index < this.currentMoveIndex) {
+        this.boardState = getInitialChessboard();
+        this.currentMoveIndex = -1;
+        
+        // 依次应用所有步骤直到目标步骤
+        for (let i = 0; i <= index; i++) {
+          this.applyMove(i);
+        }
+      } 
+      // 如果是向后跳转，只需要应用新的步骤
+      else if (index > this.currentMoveIndex) {
+        for (let i = this.currentMoveIndex + 1; i <= index; i++) {
+          this.applyMove(i);
+        }
+      }
+      
+      console.log('跳转到步骤:', index, '当前棋手:', this.currentPlayer);
+    },
+    applyMove(index) {
+      if (index < 0 || index >= this.game.moves.length) return;
+      
+      const move = this.game.moves[index];
+      
+      // 更新当前移动
+      this.currentMove = {
+        from: this.parsePosition(move.from),
+        to: this.parsePosition(move.to)
+      };
+      
+      // 更新棋盘状态 - 在实际实现中，需要根据行棋规则移动棋子
+      this.movePiece(this.currentMove.from, this.currentMove.to);
+      
+      // 更新当前步骤索引
+      this.currentMoveIndex = index;
+      
+      // 更新当前行棋方 (白方先走，然后交替)
+      this.currentPlayer = index % 2 === 0 ? 'black' : 'white';
+      
+      // 更新评估值
+      this.evaluation = move.evaluation || 0;
+      
+      // 更新开局名称（仅在前10步尝试识别开局）
+      if (index < 10) {
+        this.identifyOpening();
+      }
+    },
+    movePiece(from, to) {
+      // 从from位置获取棋子
+      const piece = this.boardState[from.row][from.col];
+      
+      // 如果有棋子，移动它
+      if (piece) {
+        // 清除原位置
+        this.boardState[from.row][from.col] = null;
+        
+        // 设置到新位置
+        this.boardState[to.row][to.col] = piece;
+      }
+    },
+    parsePosition(posStr) {
+      if (!posStr || posStr.length < 2) {
+        console.warn('无效的位置字符串:', posStr);
+        return { row: 0, col: 0 };
+      }
+      
+      const col = posStr.charCodeAt(0) - 97; // 'a'=0, 'b'=1, ...
+      const row = parseInt(posStr.charAt(1)) - 1; // '1'=0, '2'=1, ...
+      
+      return { row, col };
     },
     prevMove() {
       if (this.currentMoveIndex > -1) {
-        this.jumpToMove(this.currentMoveIndex - 1)
+        this.jumpToMove(this.currentMoveIndex - 1);
       }
     },
     nextMove() {
       if (this.currentMoveIndex < this.game.moves.length - 1) {
-        this.jumpToMove(this.currentMoveIndex + 1)
+        this.jumpToMove(this.currentMoveIndex + 1);
       }
     },
     toStart() {
-      this.jumpToMove(-1)
+      this.jumpToMove(-1);
     },
     toEnd() {
-      this.jumpToMove(this.game.moves.length - 1)
+      this.jumpToMove(this.game.moves.length - 1);
     },
     backToHome() {
       uni.navigateBack()
@@ -448,8 +613,8 @@ export default {
     },
     
     // 识别当前局面的开局
-    identifyOpening(fen) {
-      const position = fen.split(' ')[0]; // 只取位置部分
+    identifyOpening() {
+      const position = this.currentFen.split(' ')[0]; // 只取位置部分
       
       if (this.openingDatabase[position]) {
         this.currentOpeningName = this.openingDatabase[position];
@@ -469,7 +634,121 @@ export default {
     // 切换观看视角
     switchPerspective(perspective) {
       this.playAs = perspective;
-    }
+    },
+    loadLiveGameData(gameId) {
+      // 显示加载中状态
+      uni.showLoading({
+        title: '加载对局数据...'
+      });
+      
+      console.log('加载直播对局数据, 游戏ID:', gameId);
+      
+      // 调用API获取最新的对局数据
+      getGameReplayRecords(gameId)
+        .then(res => {
+          if (res.success && res.result) {
+            console.log('获取到直播对局数据:', res.result);
+            
+            // 处理对局基本信息
+            this.processGameInfo(gameId, res.result);
+            
+            // 处理行棋记录
+            this.processMovesData(res.result);
+            
+            // 初始化回放并跳转到最新一步
+            this.initializeReplay();
+            if (this.game.moves.length > 0) {
+              this.jumpToMove(this.game.moves.length - 1);
+            }
+            
+            // 设置定时轮询，获取最新动态
+            if (this.isLiveMode) {
+              this.setupLiveUpdates(gameId);
+            }
+          } else {
+            console.warn('获取直播对局数据失败:', res.message || '未知错误');
+            // 使用模拟数据兜底
+            this.useMockLiveData();
+          }
+        })
+        .catch(err => {
+          console.error('获取直播对局数据出错:', err);
+          // 使用模拟数据兜底
+          this.useMockLiveData();
+        })
+        .finally(() => {
+          uni.hideLoading();
+        });
+    },
+    
+    // 设置直播更新轮询
+    setupLiveUpdates(gameId) {
+      // 清除可能存在的定时器
+      if (this.liveUpdateTimer) {
+        clearInterval(this.liveUpdateTimer);
+      }
+      
+      // 设置定时轮询，每5秒获取一次最新数据
+      this.liveUpdateTimer = setInterval(() => {
+        this.updateLiveGameData(gameId);
+      }, 5000);
+    },
+    
+    // 更新直播对局数据
+    updateLiveGameData(gameId) {
+      console.log('更新直播对局数据, 游戏ID:', gameId);
+      
+      // 调用API获取最新的对局数据
+      getGameReplayRecords(gameId)
+        .then(res => {
+          if (res.success && res.result) {
+            const newMoves = res.result;
+            
+            // 检查是否有新的行棋记录
+            if (newMoves.length > this.game.moves.length) {
+              console.log('发现新的行棋记录:', newMoves.length - this.game.moves.length, '步');
+              
+              // 更新行棋记录
+              this.processMovesData(newMoves);
+              
+              // 自动跳转到最新一步
+              this.jumpToMove(this.game.moves.length - 1);
+            }
+          }
+        })
+        .catch(err => {
+          console.error('更新直播对局数据出错:', err);
+        });
+    },
+    
+    // 使用模拟的直播数据
+    useMockLiveData() {
+      console.log('使用模拟直播数据');
+      this.game = {
+        player1Name: 'NikoTheodo',
+        player2Name: 'theloyalwolf',
+        player1Rating: 3072,
+        player2Rating: 2952,
+        player1Avatar: 'https://pic1.imgdb.cn/item/67f3c5c7e381c3632bee8ff9.png',
+        player2Avatar: 'https://pic1.imgdb.cn/item/67f3c5c7e381c3632bee8ff9.png',
+        player1Time: '3:45',
+        player2Time: '4:12',
+        moves: [
+          { notation: 'e4', from: 'e2', to: 'e4', time: 1.2, evaluation: 0.3 },
+          { notation: 'c5', from: 'c7', to: 'c5', time: 0.8, evaluation: 0.1 }
+        ]
+      };
+      this.initializeReplay();
+      
+      // 模拟直播更新
+      if (this.isLiveMode) {
+        setTimeout(() => {
+          console.log('模拟新的棋步');
+          this.game.moves.push({ notation: 'Nf3', from: 'g1', to: 'f3', time: 1.5, evaluation: 0.4 });
+          this.jumpToMove(this.game.moves.length - 1);
+        }, 5000);
+      }
+    },
   },
   
   mounted() {
