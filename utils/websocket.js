@@ -5,7 +5,7 @@ import { Client } from '@stomp/stompjs';
 let stompClient = null;
 let subscriptions = {}; // 用于存储订阅，方便后续取消
 
-const WEBSOCKET_URL = 'http://localhost:8080/ws'; // 替换为您的后端WebSocket服务地址
+const WEBSOCKET_URL = process.env.NODE_ENV === 'production' ? 'http://47.111.122.119:8080/ws' : 'http://localhost:8080/ws'; // 替换为您的后端WebSocket服务地址
 
 export function connectWebSocket(userId, onConnectedCallback, onErrorCallback) {
   if (stompClient && stompClient.connected) {

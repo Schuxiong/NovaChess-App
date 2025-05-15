@@ -1,0 +1,251 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "API Documentation",
+    "version": "1.0"
+  },
+  "paths": {
+    "/chess/stockfish/evaluate": {
+      "get": {
+        "summary": "评估棋局",
+        "description": "评估棋局",
+        "parameters": [
+          {
+            "name": "fen",
+            "in": "query",
+            "description": "棋局的FEN表示法 棋局的FEN表示法",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "nullable": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stockfish评估结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bestMove": {
+                      "type": "string",
+                      "description": "最佳移动（例如：e2e4）"
+                    },
+                    "score": {
+                      "type": "number",
+                      "description": "评估分数\n正值表示白方优势，负值表示黑方优势"
+                    },
+                    "depth": {
+                      "type": "integer",
+                      "description": "评估深度"
+                    },
+                    "isMate": {
+                      "type": "boolean",
+                      "description": "是否是获胜移动"
+                    },
+                    "mateInMoves": {
+                      "type": "integer",
+                      "description": "如果是获胜移动，还需要多少步能够将军"
+                    },
+                    "bestLines": {
+                      "type": "array",
+                      "description": "所有最佳线路的列表（当设置了MultiPV > 1时）",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "rawOutput": {
+                      "type": "string",
+                      "description": "原始的UCI输出"
+                    }
+                  },
+                  "description": "Stockfish评估结果"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chess/stockfish/evaluate/depth/{depth}": {
+      "get": {
+        "summary": "按深度评估棋局",
+        "description": "按深度评估棋局",
+        "parameters": [
+          {
+            "name": "depth",
+            "in": "path",
+            "description": "分析深度 分析深度",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "fen",
+            "in": "query",
+            "description": "棋局的FEN表示法 棋局的FEN表示法",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "nullable": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stockfish评估结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bestMove": {
+                      "type": "string",
+                      "description": "最佳移动（例如：e2e4）"
+                    },
+                    "score": {
+                      "type": "number",
+                      "description": "评估分数\n正值表示白方优势，负值表示黑方优势"
+                    },
+                    "depth": {
+                      "type": "integer",
+                      "description": "评估深度"
+                    },
+                    "isMate": {
+                      "type": "boolean",
+                      "description": "是否是获胜移动"
+                    },
+                    "mateInMoves": {
+                      "type": "integer",
+                      "description": "如果是获胜移动，还需要多少步能够将军"
+                    },
+                    "bestLines": {
+                      "type": "array",
+                      "description": "所有最佳线路的列表（当设置了MultiPV > 1时）",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "rawOutput": {
+                      "type": "string",
+                      "description": "原始的UCI输出"
+                    }
+                  },
+                  "description": "Stockfish评估结果"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chess/stockfish/evaluate/time/{timeMs}": {
+      "get": {
+        "summary": "按时间评估棋局",
+        "description": "按时间评估棋局",
+        "parameters": [
+          {
+            "name": "timeMs",
+            "in": "path",
+            "description": "分析时间（毫秒） 分析时间（毫秒）",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "fen",
+            "in": "query",
+            "description": "棋局的FEN表示法 棋局的FEN表示法",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "nullable": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stockfish评估结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bestMove": {
+                      "type": "string",
+                      "description": "最佳移动（例如：e2e4）"
+                    },
+                    "score": {
+                      "type": "number",
+                      "description": "评估分数\n正值表示白方优势，负值表示黑方优势"
+                    },
+                    "depth": {
+                      "type": "integer",
+                      "description": "评估深度"
+                    },
+                    "isMate": {
+                      "type": "boolean",
+                      "description": "是否是获胜移动"
+                    },
+                    "mateInMoves": {
+                      "type": "integer",
+                      "description": "如果是获胜移动，还需要多少步能够将军"
+                    },
+                    "bestLines": {
+                      "type": "array",
+                      "description": "所有最佳线路的列表（当设置了MultiPV > 1时）",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "rawOutput": {
+                      "type": "string",
+                      "description": "原始的UCI输出"
+                    }
+                  },
+                  "description": "Stockfish评估结果"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chess/stockfish/best-move": {
+      "get": {
+        "summary": "获取最佳移动",
+        "description": "获取最佳移动",
+        "parameters": [
+          {
+            "name": "fen",
+            "in": "query",
+            "description": "棋局的FEN表示法 棋局的FEN表示法",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "nullable": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "最佳移动（例如：e2e4）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "description": "最佳移动（例如：e2e4）"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {}
+}

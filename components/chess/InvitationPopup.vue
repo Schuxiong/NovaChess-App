@@ -12,7 +12,7 @@
         <!-- 显示执棋颜色 -->
         <view class="play-as-info">
           <text class="play-as-text">您将执{{ getYourColor() }}子</text>
-          <view class="color-display" :class="getColorClass()"></view>
+          <view class="color-display" :class="colorDisplayClass"></view>
         </view>
         
         <view class="time-control">
@@ -51,6 +51,17 @@ export default {
         sourceOnePart: 2, // 1表示黑色，2表示白色
         acceptOnePart: 1  // 1表示黑色，2表示白色
       })
+    }
+  },
+  computed: {
+    colorDisplayClass() {
+      const color = this.getYourColor(); // 依赖 getYourColor 方法
+      if (color === '白') {
+        return 'white-color';
+      } else if (color === '黑') {
+        return 'black-color';
+      }
+      return 'random-color';
     }
   },
   methods: {
@@ -99,17 +110,6 @@ export default {
         return '白'; // 如果邀请者执黑，那么你执白
       }
       return '随机'; // 默认
-    },
-    
-    // 获取颜色样式类
-    getColorClass() {
-      const color = this.getYourColor();
-      if (color === '白') {
-        return 'white-color';
-      } else if (color === '黑') {
-        return 'black-color';
-      }
-      return 'random-color';
     },
     
     // 接受邀请

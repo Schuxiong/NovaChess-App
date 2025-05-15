@@ -6,8 +6,19 @@
     <!-- 主内容区域（设置两侧间距） -->
     <view class="main-content">
       <!-- 棋盘对战区 -->
-      <view class="chess-section">
-        <!-- 对战信息区 -->
+      <view class="chess-section" v-if="!isSelectionMode">
+        <!-- + 新增：Stockfish 评估条侧边栏 -->
+        <view class="stockfish-eval-sidebar" v-if="showStockfishEval">
+          <stockfish-eval 
+            :evaluation="stockfishEvaluation"
+            :is-loading="isStockfishLoading"
+            :error="stockfishError"
+            stockfish-version="API"
+            :show-details="false"
+            :dynamic-height="boardRenderedHeight" />
+        </view>
+
+        <!-- 对战信息区 (包含棋盘和玩家信息) -->
         <view class="player-info-container">
           <!-- 对手信息（机器人放在上方） -->
           <player-info 
@@ -38,7 +49,7 @@
           <player-info 
             :is-opponent="false"
             :player-name="playerName"
-            :avatar="playerAvatar"
+            :avatar="playerAvatar"            
             :flag="playerFlag"
             :is-turn="!isRobotTurn"
           />
@@ -223,11 +234,41 @@
           </view>
         </view>
         
-        <!-- AI思考过程显示 -->
+        <!-- AI思考过程显示 (如果需要，可以放在Stockfish控制下方) -->
         <view class="ai-thoughts-container" v-if="isAiRobot && aiThoughts">
-          <view class="ai-thoughts-title">思考过程</view>
+          <view class="ai-thoughts-title">AI 思考过程</view>
           <view class="ai-thoughts">
             <text>{{ aiThoughts }}</text>
+          </view>
+        </view>
+
+        <!-- + 新增：Stockfish 控制和信息显示 -->
+        <view class="stockfish-controls">
+          <view class="control-row">
+            <text class="info-label">显示棋盘评估:</text>
+            <switch :checked="showStockfishEval" @change="(e) => showStockfishEval = e.detail.value" color="#81b64c" />
+          </view>
+          <template v-if="showStockfishEval && stockfishEvaluation">
+            <view class="control-row">
+              <text class="info-label">引擎:</text>
+              <text class="info-value">Stockfish API</text>
+            </view>
+            <view class="control-row">
+              <text class="info-label">深度:</text>
+              <text class="info-value">{{ stockfishEvaluation.depth }}</text>
+            </view>
+            <view class="control-row" v-if="stockfishEvaluation.bestMove">
+              <text class="info-label">最佳着法:</text>
+              <text class="info-value">{{ stockfishEvaluation.bestMove }}</text>
+            </view>
+          </template>
+          <view v-if="showStockfishEval && isStockfishLoading" class="control-row">
+             <text class="info-label">状态:</text>
+             <text class="info-value">分析中...</text>
+          </view>
+           <view v-if="showStockfishEval && stockfishError" class="control-row">
+             <text class="info-label">错误:</text>
+             <text class="info-value" style="color: red;">{{ stockfishError }}</text>
           </view>
         </view>
         
@@ -402,6 +443,7 @@ import ChessBoard from '@/components/chess/ChessBoard.vue';
 import PlayerInfo from '@/components/chess/PlayerInfo.vue';
 import TabBar from '@/components/TabBar.vue';
 import TopSpacing from '@/components/TopSpacing.vue'
+import StockfishEval from '@/components/chess/StockfishEval.vue'; // + 新增：导入Stockfish评估组件
 import { 
   getPieceColor, 
   getPieceType, 
@@ -412,13 +454,15 @@ import {
 } from '@/utils/chess/cheesLogic.js';
 import { getNextMove } from './utils/deepseekService.js';
 import { checkApiAvailability, checkAllModelsAvailability, setModel, getCurrentModel, getAvailableModels } from './utils/deepseekService.js';
+import { boardToFEN, evaluateBoardByDepth } from '@/utils/stockfishService.js'; // + 新增：导入Stockfish服务
 
 export default {
   components: {
     ChessBoard,
     PlayerInfo,
     TabBar,
-    TopSpacing
+    TopSpacing,
+    StockfishEval // + 新增：注册Stockfish评估组件
   },
   data() {
     return {
@@ -527,6 +571,22 @@ export default {
       analysisDetail: 2, // 1-3，分析详细程度
       analysisDetailLabels: ['简洁', '标准', '详尽'],
       maxTokens: 800, // 默认最大生成长度
+
+      // + 新增：Stockfish评估相关状态
+      stockfishEvaluation: null,
+      isStockfishLoading: false,
+      stockfishError: null,
+      stockfishTargetDepth: 15, // Stockfish分析深度
+      showStockfishEval: true, // + 新增：控制Stockfish评估显示，默认为true
+
+      // + 新增：FEN所需状态
+      castlingRightsState: { // 王车易位权利
+        whiteKingSide: true, whiteQueenSide: true,
+        blackKingSide: true, blackQueenSide: true,
+      },
+      halfMoveClockCount: 0, // 半回合计数器 (用于50步规则)
+      currentFullMoveNumber: 1, // 当前完整回合数
+      boardRenderedHeight: '150rpx', // + 新增：棋盘渲染后的高度，给个初始值
     };
   },
   onLoad() {
@@ -538,6 +598,9 @@ export default {
     this.checkApiStatus();
     
     // ... existing onLoad code ...
+  },
+  onReady() { // uni-app的onReady生命周期，在页面初次渲染完成时触发
+    this.getBoardHeight();
   },
   methods: {
     // 检查API可用性状态
@@ -680,6 +743,9 @@ export default {
       const piece = this.boardState[from.row][from.col];
       if (!piece) return;
       
+      // 更新王车易位权限 (在实际移动前，基于原始位置判断)
+      this.updateCastlingRights(piece, from);
+      
       // 检查是否是兵升变
       const isPawn = getPieceType(piece) === 'pawn';
       const isReachingEnd = (getPieceColor(piece) === 'white' && to.row === 0) || 
@@ -768,6 +834,10 @@ export default {
       // 重置选择状态
       this.selectedPosition = null;
       this.validMoves = [];
+      
+      this.checkGameOutcome(); 
+      console.log("Stockfish: Calling triggerStockfishEvaluation from makeMove. Game over:", this.gameOver); // 添加日志
+      this.triggerStockfishEvaluation(); // 每一步后都进行评估
     },
     
     // 机器人走棋
@@ -1454,6 +1524,9 @@ export default {
       
       // 初始化游戏
       this.initGame();
+      this.$nextTick(() => { // 确保DOM更新后再获取高度
+        this.getBoardHeight(); 
+      });
     },
     
     // 初始化游戏
@@ -1506,6 +1579,12 @@ export default {
         // 显示欢迎消息
         this.showRobotMessage("欢迎挑战！请先行动吧。");
       }
+      
+      console.log("Stockfish: Calling triggerStockfishEvaluation from initGame."); // 添加日志
+      this.triggerStockfishEvaluation(); // 初始局面评估
+      this.$nextTick(() => { // 确保DOM更新后再获取高度
+        this.getBoardHeight();
+      });
     },
     
     // 思考深度变化处理
@@ -1580,6 +1659,107 @@ export default {
         this.aiThinking = false;
       }
     },
+
+    // + 新增：更新王车易位状态
+    updateCastlingRights(piece, fromPos) {
+      const pieceType = getPieceType(piece);
+      const pieceColor = getPieceColor(piece);
+
+      if (pieceType === 'king') {
+        if (pieceColor === 'white') {
+          this.castlingRightsState.whiteKingSide = false;
+          this.castlingRightsState.whiteQueenSide = false;
+        } else {
+          this.castlingRightsState.blackKingSide = false;
+          this.castlingRightsState.blackQueenSide = false;
+        }
+      } else if (pieceType === 'rook') {
+        if (pieceColor === 'white') {
+          if (fromPos.row === 7 && fromPos.col === 0) this.castlingRightsState.whiteQueenSide = false;
+          if (fromPos.row === 7 && fromPos.col === 7) this.castlingRightsState.whiteKingSide = false;
+        } else { // black rook
+          if (fromPos.row === 0 && fromPos.col === 0) this.castlingRightsState.blackQueenSide = false;
+          if (fromPos.row === 0 && fromPos.col === 7) this.castlingRightsState.blackKingSide = false;
+        }
+      }
+    },
+
+    // + 新增：触发Stockfish评估
+    async triggerStockfishEvaluation() {
+      // 条件1: 游戏结束不评估
+      if (this.gameOver) {
+        console.log("Stockfish: Game is over, not evaluating."); // 添加日志
+        return; 
+      }
+
+      this.isStockfishLoading = true;
+      this.stockfishError = null;
+      console.log("Stockfish: Starting evaluation..."); // 添加日志
+
+      try {
+        // 注意：this.specialMoves.enPassant 需要转换为正确的FEN格式（例如 e3），如果它是 {row, col} 格式
+        // 当前的 specialMoves.enPassant 存储的是可被吃过路兵的兵的位置，FEN需要的是目标格
+        // FEN的吃过路兵目标格是兵跳跃过的那个格子
+        let fenEnPassant = null;
+        if (this.specialMoves.enPassant) {
+            // 假设 this.specialMoves.enPassant 是 { row, col } 指向那个刚完成两步跳的兵
+            // 需要根据当前行棋方判断其上一格是哪个
+            const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+            let targetRowFen; // FEN中的行号是从1到8
+            if(getPieceColor(this.boardState[this.specialMoves.enPassant.row][this.specialMoves.enPassant.col]) === 'white'){
+                // 白兵刚走了两步，黑方可以吃过路兵，目标格是白兵跳过的那一格
+                targetRowFen = 8 - (this.specialMoves.enPassant.row + 1);
+            } else {
+                // 黑兵刚走了两步，白方可以吃过路兵，目标格是黑兵跳过的那一格
+                targetRowFen = 8 - (this.specialMoves.enPassant.row - 1);
+            }
+            fenEnPassant = files[this.specialMoves.enPassant.col] + targetRowFen;
+        }
+
+        const fen = boardToFEN(
+          this.boardState,
+          this.currentPlayer,
+          this.castlingRightsState,
+          fenEnPassant, // 此处需要传递 FEN 格式的吃过路兵目标格字符串，或 null
+          this.halfMoveClockCount,
+          this.currentFullMoveNumber
+        );
+        console.log("Stockfish: Generated FEN:", fen); // 这个日志非常重要
+
+        // 条件2: 检查 stockfishService.js 中的 API URL 配置
+        // evaluateBoardByDepth 内部有检查，但我们也可以在这里提前预警
+        // (这个检查已在 stockfishService.js 中，此处仅为思考点)
+
+        this.stockfishEvaluation = await evaluateBoardByDepth(fen, this.stockfishTargetDepth);
+        console.log("Stockfish: Evaluation received:", this.stockfishEvaluation); // 添加日志
+      } catch (error) {
+        console.error('Stockfish: Evaluation error in triggerStockfishEvaluation:', error); // 修改日志，更明确
+        this.stockfishError = error.message || 'Stockfish analysis failed.';
+        this.stockfishEvaluation = null; 
+      } finally {
+        this.isStockfishLoading = false;
+        console.log("Stockfish: Evaluation finished or failed."); // 添加日志
+      }
+    },
+    async getBoardHeight() {
+      try {
+        const query = uni.createSelectorQuery().in(this); // uni-app 获取DOM的方式
+        // 尝试获取 chess-board 组件实例，或者其内部的一个稳定元素
+        // 如果 ChessBoard.vue 组件内部有一个根元素且class为 chess-board-component-root，则用它
+        // 或者直接用 .board-container，但要确保它紧密包裹棋盘
+        query.select('.board-container').boundingClientRect(data => {
+          if (data && data.height) {
+            this.boardRenderedHeight = `${data.height}px`;
+            console.log('Board height acquired:', this.boardRenderedHeight);
+          } else {
+            console.warn('Could not get board height from .board-container, using default.');
+            // 保留默认或上次的高度
+          }
+        }).exec();
+      } catch (e) {
+        console.error("Error getting board height:", e);
+      }
+    },
   }
 }
 </script>
@@ -1603,22 +1783,33 @@ export default {
 
 /* 棋盘对战区样式 */
 .chess-section {
-  padding: 20rpx;
   border-radius: 20rpx;
   margin-bottom: 20rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center; // + 改为 center 尝试垂直居中评估条和棋盘容器
 }
 
-.player-info-container {
+.stockfish-eval-sidebar {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0; 
+  margin-right: 15rpx; // 可以稍微加大与棋盘的间距
+}
+
+.player-info-container { 
   display: flex;
   flex-direction: column;
   gap: 20rpx;
-  
-  .board-container {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
+  flex-grow: 1; 
+  min-width: 0; // + 防止棋盘内容溢出时把评估条挤走
+}
+
+.board-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 /* 智能教练功能区样式 */
@@ -1814,7 +2005,7 @@ export default {
   padding: 30rpx;
   background-color: rgba(0, 0, 0, 0.3);
   border-radius: 20rpx;
-  margin-bottom: 100rpx;
+  margin-bottom: 100rpx; // 为tabbar留出空间
   display: flex;
   flex-direction: column;
 }
@@ -2265,4 +2456,47 @@ export default {
     }
   }
 }
+
+/* + 新增：Stockfish评估组件容器样式 (根据需要调整位置) */
+.stockfish-eval-wrapper {
+  margin-top: 20rpx;
+  margin-bottom: 20rpx;
+  // background-color: rgba(0,0,0,0.1); // 可选背景
+  // border-radius: 10rpx;
+  // padding: 10rpx;
+}
+
+.stockfish-controls {
+  // + 新增：Stockfish控制开关和信息区域的样式
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 10rpx;
+  padding: 15rpx 20rpx;
+  margin: 10rpx 0 20rpx 0; // 调整边距
+  color: #fff;
+  font-size: 24rpx;
+
+  .control-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10rpx;
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+  .info-label {
+    color: #ddd;
+  }
+  .info-value {
+    color: #fff;
+    font-weight: bold;
+  }
+}
+
+// 确保评估条不会和走法记录重叠
+.match-info {
+  // ...
+  // flex: 1; // 移除或调整flex，以允许评估组件占据空间
+}
+
 </style> 

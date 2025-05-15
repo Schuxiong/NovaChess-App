@@ -4,6 +4,8 @@
   "description": "<div align=\"center\">\r   <img src=\"https://pic1.imgdb.cn/item/67fbede088c538a9b5ceb4a3.png\" alt=\"NovaChess Logo\" width=30% />\r   <br>\r   <p>一个现代化的国际象棋应用，提供多平台支持</p>",
   "main": "main.js",
   "scripts": {
+    "dev": "cross-env NODE_ENV=development your-dev-server-command",
+    "build": "cross-env NODE_ENV=production your-build-command",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -12,5 +14,8 @@
   "dependencies": {
     "@stomp/stompjs": "^7.1.1",
     "sockjs-client": "^1.6.1"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3"
   }
 }

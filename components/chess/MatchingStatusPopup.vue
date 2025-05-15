@@ -17,7 +17,7 @@
         
         <view class="play-as-info">
           <text class="play-as-text">您将执{{ getYourColor() }}子</text>
-          <view class="color-display" :class="getColorClass()"></view>
+          <view class="color-display" :class="colorDisplayClass"></view>
         </view>
         
         <view class="loading-indicator">
@@ -62,6 +62,16 @@ export default {
       default: 'white' // 'white'或'black'
     }
   },
+  computed: {
+    colorDisplayClass() {
+      if (this.playAs === 'white') {
+        return 'white-color';
+      } else if (this.playAs === 'black') {
+        return 'black-color';
+      }
+      return 'random-color';
+    }
+  },
   methods: {
     // 打开弹窗
     open() {
@@ -89,16 +99,6 @@ export default {
         return '黑';
       }
       return '随机';
-    },
-    
-    // 获取颜色样式类
-    getColorClass() {
-      if (this.playAs === 'white') {
-        return 'white-color';
-      } else if (this.playAs === 'black') {
-        return 'black-color';
-      }
-      return 'random-color';
     },
     
     // 取消匹配
