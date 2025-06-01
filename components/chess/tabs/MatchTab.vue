@@ -10,33 +10,36 @@
         </view>
       </view>
       
-      <!-- 走棋记录 -->
+      <!-- 走棋记录 - 优化显示格式 -->
       <view class="moves-record">
         <scroll-view scroll-y class="moves-scroll" :show-scrollbar="false">
           <view v-if="moveHistory.length === 0" class="no-moves">
             <text>棋局开始，等待第一步...</text>
           </view>
-          <view v-for="(move, index) in moveHistory" :key="index" class="move-item">
-            <text class="move-number">{{ move.moveNumber }}.</text>
-            <view class="move-detail">
-              <!-- 白方走棋 -->
-              <view class="move-column white-move" v-if="move.white">
-                <view class="move-notation">
-                  <image v-if="move.white.piece" class="piece-icon" :src="getPieceIcon(move.white.piece)" mode="aspectFit"></image>
-                  <text>{{ move.white.notation }}</text>
-                  <text class="move-time">{{ move.white.time }}</text>
-                </view>
-              </view>
-              
-              <!-- 黑方走棋 -->
-              <view class="move-column black-move" v-if="move.black">
-                <view class="move-notation">
-                  <image v-if="move.black.piece" class="piece-icon" :src="getPieceIcon(move.black.piece)" mode="aspectFit"></image>
-                  <text>{{ move.black.notation }}</text>
-                  <text class="move-time">{{ move.black.time }}</text>
-                </view>
-              </view>
+          <view v-for="(move, index) in moveHistory" :key="index" class="move-row">
+            <view class="move-number">
+              <text>{{ move.moveNumber }}.</text>
             </view>
+            
+            <!-- 白方走棋 -->
+            <view class="move-cell white-move" v-if="move.white">
+              <view class="move-content">
+                <image v-if="move.white.piece" class="piece-icon" :src="getPieceIcon(move.white.piece)" mode="aspectFit"></image>
+                <text class="move-notation">{{ move.white.notation }}</text>
+              </view>
+              <text class="move-time">{{ move.white.time }}</text>
+            </view>
+            <view class="move-cell empty-move" v-else></view>
+            
+            <!-- 黑方走棋 -->
+            <view class="move-cell black-move" v-if="move.black">
+              <view class="move-content">
+                <image v-if="move.black.piece" class="piece-icon" :src="getPieceIcon(move.black.piece)" mode="aspectFit"></image>
+                <text class="move-notation">{{ move.black.notation }}</text>
+              </view>
+              <text class="move-time">{{ move.black.time }}</text>
+            </view>
+            <view class="move-cell empty-move" v-else></view>
           </view>
         </scroll-view>
       </view>
@@ -281,55 +284,59 @@ export default {
         font-size: 28rpx;
       }
       
-      .move-item {
+      // 优化后的走棋记录样式
+      .move-row {
         display: flex;
-        padding: 10rpx 0;
+        align-items: center;
+        padding: 8rpx 0;
         border-bottom: 1rpx solid rgba(255, 255, 255, 0.1);
         
         .move-number {
-          width: 40rpx;
+          width: 50rpx;
           color: #aaa;
-          font-size: 28rpx;
-          padding-top: 6rpx;
+          font-size: 26rpx;
+          text-align: center;
         }
         
-        .move-detail {
+        .move-cell {
           flex: 1;
           display: flex;
-          flex-direction: row;
+          flex-direction: column;
+          align-items: center;
+          padding: 0 10rpx;
+          min-height: 60rpx;
           
-          .move-column {
+          .move-content {
             display: flex;
-            margin: 0 10rpx;
+            align-items: center;
+            margin-bottom: 4rpx;
+            
+            .piece-icon {
+              width: 24rpx;
+              height: 24rpx;
+              margin-right: 4rpx;
+            }
             
             .move-notation {
-              display: flex;
-              align-items: center;
-              font-size: 28rpx;
+              font-size: 26rpx;
               font-weight: bold;
               color: #fff;
-              
-              .piece-icon {
-                width: 30rpx;
-                height: 30rpx;
-                margin-right: 5rpx;
-              }
-              
-              .move-time {
-                color: #aaa;
-                font-size: 22rpx;
-                margin-left: 5rpx;
-              }
             }
           }
           
-          .white-move {
-            margin-right: 15rpx;
+          .move-time {
+            color: #aaa;
+            font-size: 20rpx;
+            line-height: 1;
           }
-          
-          .black-move {
-            margin-left: 15rpx;
-          }
+        }
+        
+        .white-move {
+          border-right: 1rpx solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .empty-move {
+          // 空白占位
         }
       }
     }
@@ -488,4 +495,4 @@ export default {
     }
   }
 }
-</style> 
+</style>

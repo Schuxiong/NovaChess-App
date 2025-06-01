@@ -249,7 +249,8 @@
     isKingInCheck,
     canCastle,
     getCastlingMoves,
-    calculateAlgebraicNotation
+    calculateAlgebraicNotation,
+    chessBoardState
   } from '@/utils/chess/cheesLogic';
   
   // 导入对弈关系API
@@ -369,6 +370,7 @@
           gameSubscription: null,
           gameIdForSubscription: null 
         },
+        enPassantTarget: null, // 新增：记录可被吃过路兵的目标格
       }
     },
     computed: {
@@ -461,7 +463,7 @@
       }, { deep: true });
     },
     onReady() {
-      console.log('页面就绪，启动邀请轮询');
+      //console.log('页面就绪，启动邀请轮询');
       
       // 清理旧邀请并启动轮询
       this.cleanupOldInvitations().then(() => {
@@ -831,93 +833,185 @@
       },
       
       /**
-       * 处理用户走棋
+       * 处理用户走棋（前端全权处理所有规则和特殊走法，组装完整消息体）
        */
       movePiece(fromPos, toPos, promoteTo = null) {
-        // 如果游戏未开始或已结束，或者不是当前玩家的回合，不允许走棋
+        // 游戏状态校验
         if (!this.gameStarted || this.gameResult || this.isCheckmated ||
             (this.playAs === 'white' && this.currentPlayer !== 'white') ||
             (this.playAs === 'black' && this.currentPlayer !== 'black')) {
           console.log('无法走棋: 游戏未开始/已结束，或者不是您的回合');
           return false;
         }
-        
-        // 确保fromPos和toPos是字符串格式，例如"e2"和"e4"
         if (typeof fromPos !== 'string' || typeof toPos !== 'string') {
           console.error('无效的棋子位置格式:', fromPos, toPos);
           return false;
         }
-        
-        // 从位置字符串解析行列（参考棋盘坐标系统）
+        // 坐标转换
         const fromCol = this.columns.indexOf(fromPos[0].toLowerCase());
         const fromRow = 8 - parseInt(fromPos[1]);
         const toCol = this.columns.indexOf(toPos[0].toLowerCase());
         const toRow = 8 - parseInt(toPos[1]);
-        
         if (fromCol === -1 || toCol === -1 || fromRow < 0 || fromRow > 7 || toRow < 0 || toRow > 7) {
           console.error('无效的棋子位置:', fromPos, toPos);
           return false;
         }
-        
-        // 获取要移动的棋子
+        // 获取棋子
         const piece = this.chessboard[fromRow][fromCol];
-        
         if (!piece) {
           console.error('起始位置没有棋子:', fromPos);
           return false;
         }
-        
-        // 检查是否是当前玩家的棋子
-        const pieceColor = piece.split('-')[0]; // 从'white-pawn'中提取'white'
+        const pieceColor = piece.split('-')[0];
         if ((this.playAs === 'white' && pieceColor !== 'white') ||
             (this.playAs === 'black' && pieceColor !== 'black')) {
           console.error('无法移动对手的棋子');
           return false;
         }
+        // 生成棋子唯一ID
+        const chessPiecesId = this.getChessPieceUniqueId(fromRow, fromCol, piece);
+        const piecesType = pieceColor === 'black' ? 1 : 2;
+        // 记录被吃棋子ID和过路兵信息
+        let tookPiecesId = null;
+        let capturedPiece = null;
+        let isEnPassant = false;
+        let enPassantCapturedPos = null;
         
-        console.log('棋子移动:', fromPos, '→', toPos);
-        
-        // 修改: 构建使用字母-数字坐标系统的请求对象
-        // 将数字坐标转回字母+数字格式
+        // 判断是否吃子（包括吃过路兵）
+        if (this.chessboard[toRow][toCol]) {
+          capturedPiece = this.chessboard[toRow][toCol];
+          tookPiecesId = this.getChessPieceUniqueId(toRow, toCol, capturedPiece);
+        } else if (this.isEnPassantMove(piece, fromRow, fromCol, toRow, toCol)) {
+          // 吃过路兵
+          isEnPassant = true;
+          const capturedRow = fromRow;
+          const capturedCol = toCol;
+          enPassantCapturedPos = { row: capturedRow, col: capturedCol };
+          capturedPiece = this.chessboard[capturedRow][capturedCol];
+          tookPiecesId = this.getChessPieceUniqueId(capturedRow, capturedCol, capturedPiece);
+          
+          // 立即从棋盘上移除被吃的兵
+          this.chessboard[capturedRow][capturedCol] = null;
+          console.log(`过路兵操作：移除位置(${capturedRow},${capturedCol})的棋子 ${capturedPiece}`);
+        }
+        // 判断升变
+        let promotionPieceType = null;
+        let isPromotion = false;
+        if (promoteTo) {
+          promotionPieceType = promoteTo.toUpperCase();
+          isPromotion = true;
+          this.chessboard[toRow][toCol] = `${pieceColor}-${promoteTo.toLowerCase()}`;
+        } else {
+          // 检查是否兵到底线自动升变
+          if (piece.endsWith('pawn') && ((pieceColor === 'white' && toRow === 0) || (pieceColor === 'black' && toRow === 7))) {
+            promotionPieceType = 'Q';
+            isPromotion = true;
+            this.chessboard[toRow][toCol] = `${pieceColor}-queen`;
+          } else {
+            this.chessboard[toRow][toCol] = piece;
+          }
+        }
+        this.chessboard[fromRow][fromCol] = null;
+        // 处理王车易位
+        let isCastling = false;
+        if (piece.endsWith('king') && Math.abs(fromCol - toCol) === 2) {
+          isCastling = true;
+          // 短易位
+          if (toCol === 6) {
+            // 右侧车移到王左边
+            this.chessboard[fromRow][5] = this.chessboard[fromRow][7];
+            this.chessboard[fromRow][7] = null;
+          } else if (toCol === 2) {
+            // 长易位
+            this.chessboard[fromRow][3] = this.chessboard[fromRow][0];
+            this.chessboard[fromRow][0] = null;
+          }
+        }
+        // 步数与用时
+        if (!this.moveSequence) this.moveSequence = 1;
+        else this.moveSequence++;
+        const moveDurationSeconds = this.calculateTimeSpentSeconds();
+        // 组装完整消息体
         const moveRequest = {
-          gameId: String(this.currentGameId),
+          chessGameId: String(this.currentGameId),
+          gameId: String(this.currentGameId), // 兼容
           userId: String(this.currentUserId),
-          fromPosition: fromPos.toUpperCase(), // 例如"e2"转换为"E2"
-          toPosition: toPos.toUpperCase(),     // 例如"e4"转换为"E4"
-          promotionPieceType: promoteTo ? promoteTo.toUpperCase() : null
+          chessPiecesId,
+          piecesType,
+          fromPositionX: fromPos[0].toLowerCase(),
+          fromPositionY: fromPos[1],
+          toPositionX: toPos[0].toLowerCase(),
+          toPositionY: toPos[1],
+          fromPosition: fromPos,
+          toPosition: toPos,
+          promotionPieceType,
+          moveSequence: this.moveSequence,
+          moveDurationSeconds,
+          tookPiecesId,
+          type: 'MOVE',
+          isCastling,
+          isPromotion,
+          isEnPassant, // 新增：标识是否为过路兵
+          enPassantCapturedPos, // 新增：被吃掉的兵的位置
         };
-        
-        console.log('发送走棋信息:', moveRequest);
-        
-        // 通过WebSocket发送移动消息
+        // 发送WebSocket
         if (this.webSocketService.stompClient && this.currentGameId) {
           try {
-            // 发送移动消息到服务器
-            const destination = `/app/movepieces`; // 使用正确的端点
+            // 如果是过路兵，打印详细信息
+            if (isEnPassant) {
+              console.log('发送过路兵移动到后端:', {
+                isEnPassant,
+                enPassantCapturedPos,
+                tookPiecesId,
+                capturedPiece
+              });
+            }
             
-            sendMessage(destination, moveRequest);
-            console.log('走棋消息发送成功');
-            
-            // 播放走棋声音
-            this.playChessSound && this.playChessSound('move');
-            
-            return true;
+            sendMessage('/app/movepieces', moveRequest);
+            this.playChessSound && this.playChessSound(capturedPiece ? 'capture' : 'move');
           } catch (error) {
             console.error('发送走棋消息失败:', error);
-            uni.showToast({
-              title: '走棋失败，请重试',
-              icon: 'none'
-            });
+            uni.showToast({ title: '走棋失败，请重试', icon: 'none' });
             return false;
           }
-          } else {
+        } else {
           console.error('WebSocket客户端未初始化或缺少游戏ID，无法发送走棋消息');
-          uni.showToast({
-            title: '网络连接中断，请重新连接',
-            icon: 'none'
-          });
+          uni.showToast({ title: '网络连接中断，请重新连接', icon: 'none' });
           return false;
         }
+        // 切换回合
+        this.currentPlayer = this.currentPlayer === 'white' ? 'black' : 'white';
+        // 记录历史
+        this.recordMoveHistory({ row: fromRow, col: fromCol }, { row: toRow, col: toCol }, piece, capturedPiece);
+        // 检查结局
+        this.checkGameOutcome();
+        return true;
+      },
+      // 生成棋子唯一ID（建议每个棋子初始化时就有唯一ID，或用位置+类型拼接）
+      getChessPieceUniqueId(row, col, piece) {
+        if (!piece) return '';
+        // 尽量保证唯一性：颜色-类型-行-列
+        return `${piece}-${row}-${col}`;
+      },
+      // 判断是否吃过路兵
+      isEnPassantMove(piece, fromRow, fromCol, toRow, toCol) {
+        if (!piece || !piece.endsWith('pawn')) return false;
+        // 只对兵有效，且目标格为空，且横向移动
+        if (Math.abs(fromCol - toCol) === 1 && this.chessboard[toRow][toCol] === null) {
+          // 白兵在5行，黑兵在4行
+          if ((piece.startsWith('white') && fromRow === 3 && toRow === 2) ||
+              (piece.startsWith('black') && fromRow === 4 && toRow === 5)) {
+            return true;
+          }
+        }
+        return false;
+      },
+      // 计算用时
+      calculateTimeSpentSeconds() {
+        if (!this.moveStartTime) return 0;
+        // 返回精确到小数点后1位的秒数
+        const timeSpent = (new Date() - this.moveStartTime) / 1000;
+        return Math.round(timeSpent * 10) / 10;
       },
       
       // 播放棋子声音 (如果方法不存在，添加此方法)
@@ -2098,10 +2192,10 @@
             
             // 将用户ID存储到本地
             uni.setStorageSync('userId', userData.id);
-            console.log('获取到用户数据:', userData);
+            //console.log('获取到用户数据:', userData);
           }
         }).catch(err => {
-          console.error('获取用户信息失败', err);
+          //console.error('获取用户信息失败', err);
           // 使用缓存中的用户ID
           const userId = uni.getStorageSync('userId');
           if (userId) {
@@ -2162,13 +2256,178 @@
       // 处理兵升变
       handlePromotion(move) {
         const { from, to, promoteTo } = move;
-        
-        // 转换为棋盘标准表示法
+        // 完成升变后再走棋并发送
+        this.doMoveAndSend(from, to, promoteTo);
+      },
+      
+      // 本地走棋并发送WebSocket
+      doMoveAndSend(from, to, promoteTo = null) {
+        // 1. 本地走棋、动画、音效
         const fromPos = this.columns[from.col] + (8 - from.row);
         const toPos = this.columns[to.col] + (8 - to.row);
+        // 先本地处理所有规则和特殊走法
+        this.movePieceLocal(from, to, promoteTo);
+        // 2. 组装消息体并发送
+        this.sendMoveToServerFull(from, to, promoteTo);
+        // 3. 切换回合、历史、结局等
+        this.currentPlayer = this.currentPlayer === 'white' ? 'black' : 'white';
+        this.recordMoveHistory(from, to, this.chessboard[to.row][to.col], null); // captured已在movePieceLocal处理
+        this.checkGameOutcome();
+        // 清除路径提示
+        if (this.$refs.chessBoard && typeof this.$refs.chessBoard.clearPathHighlights === 'function') {
+          this.$refs.chessBoard.clearPathHighlights(); 
+        } else {
+          console.warn('ChessBoard component or clearPathHighlights method not found.');
+        }
+      },
+      // 本地走棋（只更新棋盘和播放音效/动画，不发消息）
+      movePieceLocal(from, to, promoteTo = null) {
+        const piece = this.chessboard[from.row][from.col];
+        let capturedPiece = null;
+        let isEnPassant = false;
+
+        // 检查是否为吃过路兵
+        if (piece.endsWith('pawn') && 
+            this.enPassantTarget && 
+            to.row === this.enPassantTarget.row && 
+            to.col === this.enPassantTarget.col && 
+            Math.abs(from.col - to.col) === 1 && 
+            this.chessboard[to.row][to.col] === null) {
+          isEnPassant = true;
+          const capturedPawnRow = from.row; 
+          const capturedPawnCol = to.col;   
+          capturedPiece = this.chessboard[capturedPawnRow][capturedPawnCol]; 
+          this.$set(this.chessboard[capturedPawnRow], capturedPawnCol, null); 
+          this.playChessSound && this.playChessSound('capture');
+          this.enPassantTarget = null; 
+        } else if (this.chessboard[to.row][to.col]) {
+          capturedPiece = this.chessboard[to.row][to.col];
+          this.playChessSound && this.playChessSound('capture');
+        } else {
+          this.playChessSound && this.playChessSound('move');
+        }
+
+        // 更新棋盘上的棋子位置 (先移动棋子，再处理特殊逻辑如升变和易位)
+        this.$set(this.chessboard[to.row], to.col, piece);
+        this.$set(this.chessboard[from.row], from.col, null);
         
-        // 完成升变
-        this.movePiece(fromPos, toPos, promoteTo);
+        // 重要：调用recordMove来正确处理过路兵状态
+        const moveInfo = {
+          isEnPassant: isEnPassant,
+          capturedPiecePos: isEnPassant ? { row: from.row, col: to.col } : null,
+          isPromotion: !!promoteTo,
+          promoteTo: promoteTo
+        };
+        recordMove(this.chessboard, from, to, moveInfo);
+
+        // 兵升变
+        if (promoteTo) {
+          this.$set(this.chessboard[to.row], to.col, `${getPieceColor(piece)}-${promoteTo.toLowerCase()}`);
+        } else if (piece.endsWith('pawn') && ((piece.startsWith('white') && to.row === 0) || (piece.startsWith('black') && to.row === 7))) {
+          this.$set(this.chessboard[to.row], to.col, `${getPieceColor(piece)}-queen`); 
+        }
+
+        // 王车易位
+        if (piece.endsWith('king') && Math.abs(from.col - to.col) === 2) {
+          const kingId = this.getChessPieceUniqueId(from.row, from.col, piece); // 王移动前的位置
+          this.movedPieces.add(kingId); // 标记王已移动
+
+          let rook, rookOriginalCol, rookTargetCol, rookId;
+          if (to.col === 6) { // 短易位 (kingside)
+            rookOriginalCol = 7;
+            rookTargetCol = 5;
+          } else if (to.col === 2) { // 长易位 (queenside)
+            rookOriginalCol = 0;
+            rookTargetCol = 3;
+          }
+          rook = this.chessboard[from.row][rookOriginalCol]; // 获取对应车
+          if (rook) {
+            rookId = this.getChessPieceUniqueId(from.row, rookOriginalCol, rook); // 车移动前的位置
+            this.$set(this.chessboard[from.row], rookTargetCol, rook); // 移动车
+            this.$set(this.chessboard[from.row], rookOriginalCol, null);
+            this.movedPieces.add(rookId); // 标记车已移动
+          }
+        } else if (piece.endsWith('king') || piece.endsWith('rook')) {
+            // 如果王或车进行了普通移动，也标记为已移动
+            const movedPieceId = this.getChessPieceUniqueId(to.row, to.col, this.chessboard[to.row][to.col]); // 使用移动后的位置和棋子
+            this.movedPieces.add(movedPieceId);
+        }
+
+        // 维护enPassantTarget
+        if (piece.endsWith('pawn') && Math.abs(from.row - to.row) === 2) {
+          this.enPassantTarget = { row: (from.row + to.row) / 2, col: from.col };
+        } else if (!isEnPassant) { // 只有在不是吃过路兵的情况下才清除，因为吃过路兵时已经清除了
+          this.enPassantTarget = null;
+        }
+      },
+      // 组装完整消息体并发送
+      sendMoveToServerFull(from, to, promoteTo = null) {
+        // 发送时用from位置的piece（因为to位置已变）
+        const piece = this.chessboard[to.row][to.col];
+        const pieceColor = getPieceColor(piece);
+        const chessPiecesId = this.getChessPieceUniqueId(from.row, from.col, piece);
+        const piecesType = pieceColor === 'black' ? 1 : 2;
+        let tookPiecesId = null;
+        let isEnPassant = false;
+        // 吃过路兵
+        if (piece.endsWith('pawn') && Math.abs(from.col - to.col) === 1 && this.enPassantTarget && to.row === this.enPassantTarget.row && to.col === this.enPassantTarget.col) {
+          isEnPassant = true;
+          const capturedRow = from.row;
+          const capturedCol = to.col;
+          tookPiecesId = this.getChessPieceUniqueId(capturedRow, capturedCol, this.chessboard[capturedRow][capturedCol]);
+        } else if (this.chessboard[to.row][to.col]) {
+          tookPiecesId = this.getChessPieceUniqueId(to.row, to.col, this.chessboard[to.row][to.col]);
+        }
+        let promotionPieceType = null;
+        let isPromotion = false;
+        if (promoteTo) {
+          promotionPieceType = promoteTo.toUpperCase();
+          isPromotion = true;
+        } else if (piece.endsWith('pawn') && ((pieceColor === 'white' && to.row === 0) || (pieceColor === 'black' && to.row === 7))) {
+          promotionPieceType = 'Q';
+          isPromotion = true;
+        }
+        let isCastling = false;
+        if (piece.endsWith('king') && Math.abs(from.col - to.col) === 2) {
+          isCastling = true;
+        }
+        if (!this.moveSequence) this.moveSequence = 1;
+        else this.moveSequence++;
+        const moveDurationSeconds = this.calculateTimeSpentSeconds();
+        const fromPos = this.columns[from.col] + (8 - from.row);
+        const toPos = this.columns[to.col] + (8 - to.row);
+        const moveRequest = {
+          chessGameId: String(this.currentGameId),
+          gameId: String(this.currentGameId),
+          userId: String(this.currentUserId),
+          chessPiecesId,
+          piecesType,
+          fromPositionX: fromPos[0].toLowerCase(),
+          fromPositionY: fromPos[1],
+          toPositionX: toPos[0].toLowerCase(),
+          toPositionY: toPos[1],
+          fromPosition: fromPos,
+          toPosition: toPos,
+          promotionPieceType,
+          moveSequence: this.moveSequence,
+          moveDurationSeconds,
+          tookPiecesId,
+          type: 'MOVE',
+          isCastling,
+          isPromotion,
+          isEnPassant,
+        };
+        if (this.webSocketService.stompClient && this.currentGameId) {
+          try {
+            sendMessage('/app/movepieces', moveRequest);
+          } catch (error) {
+            console.error('发送走棋消息失败:', error);
+            uni.showToast({ title: '走棋失败，请重试', icon: 'none' });
+          }
+        } else {
+          console.error('WebSocket客户端未初始化或缺少游戏ID，无法发送走棋消息');
+          uni.showToast({ title: '网络连接中断，请重新连接', icon: 'none' });
+        }
       },
       
       // 处理棋盘格子点击
@@ -2177,55 +2436,76 @@
         if (!this.gameStarted || this.gameResult || this.isCheckmated) {
           return;
         }
-
         const { row, col } = position;
         const piece = this.chessboard[row][col];
-        
-        // 如果已经选中棋子，尝试移动
+        // 已选中棋子，尝试移动
         if (this.selectedPosition) {
-          // 如果点击的是同一个位置，取消选择
           if (this.selectedPosition.row === row && this.selectedPosition.col === col) {
             this.selectedPosition = null;
             this.validMoves = [];
             return;
           }
-          
-          // 如果点击的是有效移动位置，执行移动
           const validMove = this.validMoves.find(move => move.row === row && move.col === col);
           if (validMove) {
-            // 转换为棋盘标准表示法（如"e2"到"e4"）
-            const fromPos = this.columns[this.selectedPosition.col] + (8 - this.selectedPosition.row);
-            const toPos = this.columns[col] + (8 - row);
-            
-            console.log(`尝试移动: ${fromPos} → ${toPos}`);
-            
-            // 执行移动
-            this.movePiece(fromPos, toPos);
-            
-            // 清除选择状态
+            // 检查是否兵升变
+            const from = this.selectedPosition;
+            const to = { row, col };
+            const movingPiece = this.chessboard[from.row][from.col];
+            if (movingPiece && movingPiece.endsWith('pawn') && ((movingPiece.startsWith('white') && to.row === 0) || (movingPiece.startsWith('black') && to.row === 7))) {
+              // 弹出升变弹窗，等待用户选择
+              this.$refs.chessBoard.pendingMove = { from, to };
+              this.$refs.chessBoard.promotionPosition = to;
+              this.$refs.chessBoard.showPromotionDialog = true;
+              // 交互完成后会触发handlePromotion
+              return;
+            }
+            // 非升变，直接本地走棋并发送
+            this.doMoveAndSend(from, to);
             this.selectedPosition = null;
             this.validMoves = [];
             return;
           }
-          
-          // 如果点击的是同颜色的其他棋子，更新选择
           if (piece && getPieceColor(piece) === this.currentPlayer) {
             this.selectPiece(row, col);
             return;
           }
-          
-          // 否则，取消选择
           this.selectedPosition = null;
           this.validMoves = [];
-        } 
-        // 如果没有选中棋子，且点击了当前玩家的棋子，选中它
-        else if (piece && getPieceColor(piece) === this.currentPlayer) {
+        } else if (piece && getPieceColor(piece) === this.currentPlayer) {
           this.selectPiece(row, col);
         }
       },
       
       // 选择棋子
       selectPiece(row, col) {
+        const piece = this.chessboard[row][col]; 
+        if (!piece) {
+          this.selectedPosition = null;
+          this.validMoves = [];
+          return; 
+        }
+
+        // 确保执白方只能控制白色棋子，执黑方只能控制黑色棋子
+        // 注意：currentPlayer的检查已在handleCellClick中完成
+        if (this.playAs === 'white' && getPieceColor(piece) !== 'white') {
+          console.log("执白方只能控制白色棋子");
+          this.selectedPosition = null; // 清除选择
+          this.validMoves = [];      // 清除合法移动
+          if (this.$refs.chessBoard) {
+            this.$refs.chessBoard.clearHighlights(); // 清除棋盘高亮
+          }
+          return;
+        }
+        if (this.playAs === 'black' && getPieceColor(piece) !== 'black') {
+          console.log("执黑方只能控制黑色棋子");
+          this.selectedPosition = null; // 清除选择
+          this.validMoves = [];      // 清除合法移动
+          if (this.$refs.chessBoard) {
+            this.$refs.chessBoard.clearHighlights(); // 清除棋盘高亮
+          }
+          return;
+        }
+
         this.selectedPosition = { row, col };
         // 获取有效移动
         this.validMoves = getValidMoves(this.chessboard, row, col);
@@ -2362,13 +2642,13 @@
         }
         
         // 打印当前存储的所有键值对，帮助调试
-        console.log('当前存储的所有键值:');
+        //console.log('当前存储的所有键值:');
         try {
           const storageInfo = uni.getStorageInfoSync();
           if (storageInfo && storageInfo.keys) {
             storageInfo.keys.forEach(key => {
               const value = uni.getStorageSync(key);
-              console.log(`Key: ${key}, Value:`, value);
+              //console.log(`Key: ${key}, Value:`, value);
             });
           }
         } catch (error) {
@@ -2380,18 +2660,18 @@
           return;
         }
         
-        console.log('正在查询待接受的邀请...', '用户ID:', userId);
+        //console.log('正在查询待接受的邀请...', '用户ID:', userId);
         queryPendingInvitations(userId).then(res => {
-          console.log('查询邀请结果:', res);
+          //console.log('查询邀请结果:', res);
           if (res.success && res.result) {
             this.pendingInvitations = Array.isArray(res.result) ? res.result : [];
-            console.log('获取到待接受邀请:', this.pendingInvitations.length, '个');
+            //console.log('获取到待接受邀请:', this.pendingInvitations.length, '个');
             
             // 如果有待接受的邀请，且当前没有显示邀请弹窗也没有对局进行中
             if (this.pendingInvitations.length > 0 && !this.invitationShown && !this.gameStarted) {
               // 获取第一个邀请
               const invitation = this.pendingInvitations[0];
-              console.log('处理邀请:', invitation);
+              //console.log('处理邀请:', invitation);
               
               if (!invitation.id) {
                 console.warn('邀请缺少ID，无法显示');
@@ -2416,7 +2696,7 @@
                 console.log(`还有 ${this.pendingInvitations.length - 1} 个待处理的邀请`);
               }
             } else if (this.pendingInvitations.length === 0) {
-              console.log('没有待处理的邀请');
+             // console.log('没有待处理的邀请');
             } else if (this.invitationShown) {
               console.log('邀请弹窗已显示，不再显示新邀请');
             } else if (this.gameStarted) {
@@ -2488,15 +2768,15 @@
         // 获取当前用户ID
         const userId = this.currentUserId || uni.getStorageSync('userId');
         if (!userId) {
-          console.log('未找到用户ID，跳过清理邀请');
+         // console.log('未找到用户ID，跳过清理邀请');
           return Promise.resolve();
         }
         
-        console.log('清理旧邀请，用户ID:', userId);
+        //console.log('清理旧邀请，用户ID:', userId);
         return clearPendingInvitations(userId).then(() => {
-          console.log('成功清理旧邀请');
+         // console.log('成功清理旧邀请');
         }).catch(err => {
-          console.error('清理旧邀请失败:', err);
+          //console.error('清理旧邀请失败:', err);
         });
       },
       
@@ -2658,6 +2938,7 @@
             if (message.payload) {
                 const moveInfo = message.payload.moveInfo;
                 const latestGameState = message.payload.latestGameState;
+                const moveHistory = message.payload.moveHistory;
                 
                 if (moveInfo) {
                     console.log('收到走棋:', moveInfo);
@@ -2679,6 +2960,14 @@
                 // 无论谁走的棋，都使用服务器返回的最新游戏状态更新棋盘
                 if (latestGameState) {
                     this.updateGameViewFromServer(latestGameState);
+                }
+                
+                // 直接从payload中获取moveHistory并更新走棋历史
+                if (moveHistory && Array.isArray(moveHistory)) {
+                    console.log('WebSocket: 从payload中获取到moveHistory，开始更新走棋历史:', moveHistory);
+                    // 获取chessPiecesList，优先从latestGameState，如果没有则从payload
+                    const chessPiecesList = (latestGameState && latestGameState.chessPiecesList) || message.payload.chessPiecesList;
+                    this.updateMoveHistoryFromServer(moveHistory, chessPiecesList);
                 }
             }
             break;
@@ -2871,6 +3160,9 @@
         } else {
           console.warn('无法确定当前行棋方，无法从currentTurn或currentHoldChess获取信息');
         }
+        
+        // 重要：在this.currentPlayer更新后同步过路兵状态到cheesLogic.js
+        this.syncEnPassantStateToLogic(gameState);
 
         // 3. 更新上一部棋 (this.lastMove) - 用于棋盘高亮
         if (gameState.lastMoveVO) {
@@ -2885,6 +3177,11 @@
         // 5. 更新计时器
         this.updateTimersFromState(gameState);
         
+        // 6. 更新走棋历史记录
+        if (gameState.moveHistory && Array.isArray(gameState.moveHistory)) {
+          this.updateMoveHistoryFromServer(gameState.moveHistory, gameState.chessPiecesList);
+        }
+        
         // Mark game as started if it wasn't already by client logic
         if (!this.gameStarted && (gameState.gameStatus === 'ONGOING' || gameState.gameStatus === 1 || this.isCheckmated || this.gameResult)) {
             this.gameStarted = true;
@@ -2897,6 +3194,133 @@
         this.checkPlayerTurn(gameState);
 
         console.log(`[DEBUG] updateGameViewFromServer - After update: this.playAs=${this.playAs}, this.currentPlayer=${this.currentPlayer}`);
+      },
+      
+      // 同步过路兵状态到cheesLogic.js
+      syncEnPassantStateToLogic(gameState) { // gameState might be stale or not what's expected for currentPlayer logic here
+        console.log(`[DEBUG syncEnPassantStateToLogic] Received gameState.currentTurn: ${gameState ? gameState.currentTurn : 'N/A'}, this.currentPlayer: ${this.currentPlayer}`);
+        console.log('===== 同步过路兵状态到逻辑层 =====');
+        console.log('Current this.chessboard state:', JSON.parse(JSON.stringify(this.chessboard)));
+        
+        // 首先检查是否有本地过路兵状态
+        if (this.enPassantTarget) {
+          console.log('- 发现本地过路兵状态，同步到逻辑层:', this.enPassantTarget);
+          
+          // 根据过路兵目标位置推断过路兵状态
+          const enPassantRow = this.enPassantTarget.row;
+          const enPassantCol = this.enPassantTarget.col;
+          
+          // 确定可以吃过路兵的颜色（与刚移动的兵颜色相反）
+          let captureColor = null;
+          const pawnRow = enPassantRow === 2 ? 3 : 4; // 过路兵目标在第3行时，兵在第4行；目标在第6行时，兵在第5行
+          const pawnPiece = this.chessboard[pawnRow][enPassantCol];
+          
+          if (pawnPiece && getPieceType(pawnPiece) === 'pawn') {
+            const pawnColor = getPieceColor(pawnPiece);
+            captureColor = pawnColor === 'white' ? 'black' : 'white';
+            
+            console.log(`- 检测到过路兵: 位置(${pawnRow},${enPassantCol}), 颜色${pawnColor}, 可被${captureColor}吃掉`);
+            
+            // 设置过路兵状态
+            chessBoardState.enPassant = {
+              row: enPassantRow,
+              col: enPassantCol,
+              captureColor: captureColor
+            };
+            
+            console.log('- 已设置过路兵状态:', chessBoardState.enPassant);
+          } else {
+            console.log('- 未找到对应的兵，清除过路兵状态');
+            chessBoardState.enPassant = null;
+          }
+        } else {
+          // 如果没有本地过路兵状态，尝试从棋盘状态推断
+          console.log('- 无本地过路兵状态，尝试从棋盘状态推断');
+          
+          // 检查是否有可能的过路兵情况
+          // 白兵在第4行，黑兵在旁边的第4行，说明黑兵可能刚刚走了双格
+          // 黑兵在第5行，白兵在旁边的第5行，说明白兵可能刚刚走了双格
+          let foundEnPassant = false;
+          
+          // 检查白兵是否可以吃过路兵（黑兵在第4行）
+          // Use this.currentPlayer which should be correctly set by updateGameViewFromServer
+          if (this.currentPlayer === 'white') {
+            console.log('[DEBUG EnPassant Logic] Current player is WHITE, checking for black pawns on row 3 (0-indexed)');
+            for (let col = 0; col < 8; col++) {
+              const piece = this.chessboard[3][col]; // Correctly check row 3 for black pawns
+              console.log(`[DEBUG EnPassant White] Checking col ${col} on row 3: piece is ${piece}, pieceType: ${getPieceType(piece)}, pieceColor: ${getPieceColor(piece)}`);
+
+              if (piece && getPieceType(piece) === 'pawn' && getPieceColor(piece) === 'black') {
+                console.log(`[DEBUG EnPassant White] Found black pawn at (3, ${col}). Checking neighbors on row 3.`);
+                const leftNeighbor = col > 0 ? this.chessboard[3][col-1] : 'N/A';
+                const rightNeighbor = col < 7 ? this.chessboard[3][col+1] : 'N/A';
+                const leftCondition = col > 0 && this.chessboard[3][col-1] && getPieceType(this.chessboard[3][col-1]) === 'pawn' && getPieceColor(this.chessboard[3][col-1]) === 'white';
+                const rightCondition = col < 7 && this.chessboard[3][col+1] && getPieceType(this.chessboard[3][col+1]) === 'pawn' && getPieceColor(this.chessboard[3][col+1]) === 'white';
+                console.log(`[DEBUG EnPassant White] Left neighbor (3, ${col-1}): ${leftNeighbor}, Condition: ${leftCondition}`);
+                console.log(`[DEBUG EnPassant White] Right neighbor (3, ${col+1}): ${rightNeighbor}, Condition: ${rightCondition}`);
+                
+                if (leftCondition || rightCondition) {
+                  const enPassantRow = 2; // Target row for white capturing en passant
+                  const enPassantCol = col;
+                  console.log(`- 推断出可能的过路兵: 黑兵在(3,${col}), 目标位置(${enPassantRow},${enPassantCol}), 可被white吃掉`);
+                  chessBoardState.enPassant = {
+                    row: enPassantRow,
+                    col: enPassantCol,
+                    captureColor: 'white'
+                  };
+                  console.log('- 已设置推断的过路兵状态:', chessBoardState.enPassant);
+                  foundEnPassant = true;
+                  break;
+                } else {
+                  console.log(`[DEBUG EnPassant White] No white pawn found next to black pawn at (3, ${col})`);
+                }
+              }
+            }
+          } 
+          // 检查黑兵是否可以吃过路兵（白兵在第5行）
+          // Use this.currentPlayer which should be correctly set by updateGameViewFromServer
+          else if (this.currentPlayer === 'black') {
+            console.log('[DEBUG EnPassant Logic] Current player is BLACK, checking for white pawns on row 4 (0-indexed)');
+            for (let col = 0; col < 8; col++) {
+              const piece = this.chessboard[4][col];
+              console.log(`[DEBUG EnPassant Black] Checking col ${col}: piece is ${piece}, pieceType: ${getPieceType(piece)}, pieceColor: ${getPieceColor(piece)}`);
+
+              if (piece && getPieceType(piece) === 'pawn' && getPieceColor(piece) === 'white') {
+                console.log(`[DEBUG EnPassant Black] Found white pawn at (4, ${col}). Checking neighbors.`);
+                const leftNeighbor = col > 0 ? this.chessboard[4][col-1] : 'N/A';
+                const rightNeighbor = col < 7 ? this.chessboard[4][col+1] : 'N/A';
+                const leftCondition = col > 0 && this.chessboard[4][col-1] && getPieceType(this.chessboard[4][col-1]) === 'pawn' && getPieceColor(this.chessboard[4][col-1]) === 'black';
+                const rightCondition = col < 7 && this.chessboard[4][col+1] && getPieceType(this.chessboard[4][col+1]) === 'pawn' && getPieceColor(this.chessboard[4][col+1]) === 'black';
+                console.log(`[DEBUG EnPassant Black] Left neighbor (4, ${col-1}): ${leftNeighbor}, Condition: ${leftCondition}`);
+                console.log(`[DEBUG EnPassant Black] Right neighbor (4, ${col+1}): ${rightNeighbor}, Condition: ${rightCondition}`);
+                
+                if (leftCondition || rightCondition) {
+                  const enPassantRow = 5;
+                  const enPassantCol = col;
+                  console.log(`- 推断出可能的过路兵: 白兵在(4,${col}), 目标位置(${enPassantRow},${enPassantCol}), 可被black吃掉`);
+                  chessBoardState.enPassant = {
+                    row: enPassantRow,
+                    col: enPassantCol,
+                    captureColor: 'black'
+                  };
+                  console.log('- 已设置推断的过路兵状态:', chessBoardState.enPassant);
+                  foundEnPassant = true;
+                  break;
+                } else {
+                  console.log(`[DEBUG EnPassant Black] No black pawn found next to white pawn at (4, ${col})`);
+                }
+              }
+            }
+          }
+          
+          // 如果没有找到可能的过路兵情况，清除过路兵状态
+          if (!foundEnPassant) {
+            console.log('- 未推断出过路兵状态，清除逻辑层过路兵状态');
+            chessBoardState.enPassant = null;
+          }
+        }
+        
+        console.log('===== 过路兵状态同步完成 =====');
       },
       
       // 新增: 判断当前轮次并显示对应提示
@@ -3200,6 +3624,7 @@
           }
           
           // 根据当前行棋方启动对应的计时器
+          // Use this.currentPlayer which should be correctly set by updateGameViewFromServer
           if (this.currentPlayer === 'white') {
             this.startWhiteTimer();
           } else if (this.currentPlayer === 'black') {
@@ -3316,6 +3741,145 @@
         } catch (e) {
           console.error('从chessPiecesList更新棋盘时出错:', e);
           return false;
+        }
+      },
+      
+      // 新增：从服务器更新走棋历史记录
+      updateMoveHistoryFromServer(serverMoveHistory, chessPiecesList = null) {
+        try {
+          console.log('开始更新走棋历史，服务器数据:', serverMoveHistory);
+          
+          // 清空现有的走棋历史
+          this.moveHistory = [];
+          this.formattedMoveHistory = [];
+          
+          // 按照createTime排序，确保走棋顺序正确
+          const sortedMoves = serverMoveHistory.sort((a, b) => {
+            return new Date(a.createTime) - new Date(b.createTime);
+          });
+          
+          console.log('排序后的走棋历史:', sortedMoves);
+          
+          // 创建棋子ID到棋子信息的映射
+          const pieceMap = new Map();
+          if (chessPiecesList && Array.isArray(chessPiecesList)) {
+            chessPiecesList.forEach(piece => {
+              pieceMap.set(piece.id, piece);
+            });
+          }
+          
+          // 将服务器的走棋记录转换为前端格式
+          sortedMoves.forEach((move, index) => {
+            // 转换棋子类型
+            const pieceTypeMap = {
+              1: 'black', // 黑方
+              2: 'white'  // 白方
+            };
+            
+            const color = pieceTypeMap[move.piecesType] || 'white';
+            
+            // 根据chessPiecesId获取棋子类型
+            let pieceType = 'pawn'; // 默认为兵
+            if (move.chessPiecesId && pieceMap.has(move.chessPiecesId)) {
+              const pieceInfo = pieceMap.get(move.chessPiecesId);
+              const chessPiecesName = pieceInfo.chessPiecesName.toLowerCase();
+              switch(chessPiecesName) {
+                case 'king': pieceType = 'king'; break;
+                case 'queen': pieceType = 'queen'; break;
+                case 'rook': pieceType = 'rook'; break;
+                case 'bishop': pieceType = 'bishop'; break;
+                case 'knight': pieceType = 'knight'; break;
+                case 'pawn': pieceType = 'pawn'; break;
+                default: pieceType = 'pawn';
+              }
+            }
+            
+            // 构造走法字符串
+            const fromPos = `${move.fromPositionX}${move.fromPositionY}`;
+            const toPos = `${move.toPositionX}${move.toPositionY}`;
+            const moveNotation = `${fromPos}-${toPos}`;
+            
+            // 计算用时（使用moveDurationSeconds字段）
+            let timeUsed = '00:00';
+            if (move.moveDurationSeconds) {
+              // 如果是浮点数，直接显示秒数格式（如"6.7s"）
+              if (move.moveDurationSeconds < 60) {
+                timeUsed = `${move.moveDurationSeconds}s`;
+              } else {
+                // 超过60秒时，转换为mm:ss.x格式
+                const minutes = Math.floor(move.moveDurationSeconds / 60);
+                const seconds = (move.moveDurationSeconds % 60).toFixed(1);
+                timeUsed = `${minutes.toString().padStart(2, '0')}:${seconds.padStart(4, '0')}`;
+              }
+            } else if (move.createTime) {
+              // 如果没有moveDurationSeconds，使用默认值
+              timeUsed = '00:05';
+            }
+            
+            // 添加到原始走棋历史
+            this.moveHistory.push({
+              id: move.id,
+              from: { x: move.fromPositionX, y: move.fromPositionY },
+              to: { x: move.toPositionX, y: move.toPositionY },
+              piece: { type: pieceType, color: color },
+              captured: move.tookPiecesId ? true : false,
+              time: timeUsed,
+              createTime: move.createTime
+            });
+            
+            // 构造格式化的走棋历史（用于显示）
+            // 简化逻辑：按照走棋顺序分配，每两步为一个回合
+            const isWhiteMove = (color === 'white');
+            
+            // 计算回合数：白方走棋时回合数向上取整，黑方走棋时回合数向下取整
+            let moveNumber;
+            if (isWhiteMove) {
+              // 白方走棋：1,3,5,7... -> 回合 1,2,3,4...
+              moveNumber = Math.floor(index / 2) + 1;
+            } else {
+              // 黑方走棋：2,4,6,8... -> 回合 1,2,3,4...
+              moveNumber = Math.floor((index + 1) / 2);
+            }
+            
+            // 查找或创建对应回合的记录
+            let roundRecord = this.formattedMoveHistory.find(record => record.moveNumber === moveNumber);
+            if (!roundRecord) {
+              roundRecord = {
+                moveNumber: moveNumber,
+                white: null,
+                black: null
+              };
+              this.formattedMoveHistory.push(roundRecord);
+            }
+            
+            // 构造走法显示对象
+            const moveDisplay = {
+              notation: moveNotation,
+              piece: `${color}-${pieceType}`,
+              time: timeUsed,
+              captured: move.tookPiecesId ? true : false
+            };
+            
+            // 根据颜色分配到对应位置
+            if (isWhiteMove) {
+              roundRecord.white = moveDisplay;
+            } else {
+              roundRecord.black = moveDisplay;
+            }
+          });
+          
+          // 按回合号排序
+          this.formattedMoveHistory.sort((a, b) => a.moveNumber - b.moveNumber);
+          
+          console.log('更新后的格式化走棋历史:', this.formattedMoveHistory);
+          
+          // 强制更新MatchTab组件
+          this.$nextTick(() => {
+            this.$forceUpdate();
+          });
+          
+        } catch (error) {
+          console.error('更新走棋历史时出错:', error);
         }
       },
       

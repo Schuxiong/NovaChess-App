@@ -349,6 +349,23 @@ export default {
       } else {
         console.log(`- 之前无过路兵位置`);
       }
+    },
+    
+    // 清除所有高亮效果
+    clearHighlights() {
+      // 清除特殊移动标记
+      this.specialMoves.castling = [];
+      this.specialMoves.enPassant = null;
+      
+      // 清除升变相关状态
+      this.showPromotionDialog = false;
+      this.pendingMove = null;
+      this.promotionPosition = null;
+      
+      // 清除动画状态
+      this.animatingPiece = null;
+      this.showCheckmateAnimation = false;
+      
       console.log(`===== 结束设置过路兵位置 =====`);
     }
   },

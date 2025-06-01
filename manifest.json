@@ -1,5 +1,5 @@
 {
-    "name" : "若依移动端",
+    "name" : "NovaChess移动端",
     "appid" : "__UNI__F4EE97F",
     "description" : "",
     "versionName" : "1.2.0",
@@ -41,7 +41,7 @@
     },
     "quickapp" : {},
     "mp-weixin" : {
-        "appid" : "wxbf9033cc60ce8507",
+        "appid" : "wx62f5cf719d5193bf",
         "setting" : {
             "urlCheck" : false,
             "es6" : false,
@@ -59,11 +59,11 @@
         "devServer" : {
             "port" : 9090,
             "https" : false,
-            "proxy": {
-                "/api": {
-                    "target": "https://api.deepseek.com",
-                    "changeOrigin": true,
-                    "secure": false
+            "proxy" : {
+                "/api" : {
+                    "target" : "https://api.deepseek.com",
+                    "changeOrigin" : true,
+                    "secure" : false
                 }
             }
         },

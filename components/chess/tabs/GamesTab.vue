@@ -93,6 +93,7 @@
 
 <script>
 import { getChessMovesHistory } from '@/api/game';
+import { getHistoryGamesList } from '../../../api/game';
 
 export default {
   props: {
@@ -215,7 +216,7 @@ export default {
       }
       
       // 调用API获取用户对局历史
-      getChessMovesHistory(params)
+      getHistoryGamesList(params)
         .then(res => {
           if (res.success && res.result && res.result.records) {
             // 将数据处理为标准格式
@@ -254,19 +255,24 @@ export default {
       if (!records || !Array.isArray(records)) return [];
       
       return records.map(record => {
-        // 根据实际数据结构处理
-        // 这里假设record是对局记录，需要提取和计算显示需要的字段
-        return {
-          id: record.id || record.chessGameId || '',
-          player1Name: record.player1Name || record.whitePlayerName || '玩家1',
-          player2Name: record.player2Name || record.blackPlayerName || '玩家2',
-          player1Rating: record.player1Rating || record.whitePlayerRating || '?',
-          player2Rating: record.player2Rating || record.blackPlayerRating || '?',
-          gameState: record.gameState || 0, // 0:未开始 1:进行中 2:白胜 3:黑胜 4:和棋
+        // 根据新的数据结构处理
+        const processedGame = {
+          id: record.id || '',
+          player1Name: record.whitePlayAccount || '白方玩家',
+          player2Name: record.blackPlayAccount || '黑方玩家',
+          player1Rating: '?', // 当前数据结构中没有rating信息
+          player2Rating: '?', // 当前数据结构中没有rating信息
+          gameState: record.gameState || 0, // 1:进行中 2:白胜 3:黑胜 4:和棋等
+          gameType: record.gameType || 1,
+          currentTurn: record.currentTurn || 1, // 1:白方 2:黑方
           createTime: record.createTime || '',
-          endTime: record.endTime || '',
-          // 其他需要的字段...
+          updateTime: record.updateTime || '',
         };
+        
+        // 计算游戏时长
+        processedGame.duration = this.calculateGameDuration(record.createTime, record.updateTime, record.gameState);
+        
+        return processedGame;
       });
     },
     
@@ -274,14 +280,16 @@ export default {
     getGameResult(game) {
       // 根据gameState显示不同的结果
       switch(game.gameState) {
+        case 1: // 进行中
+          return '进行中';
         case 2: // 白胜
           return '1-0';
         case 3: // 黑胜
           return '0-1';
         case 4: // 和棋
           return '½-½';
-        case 1: // 进行中
-          return '进行中';
+        case 0: // 未开始
+          return '未开始';
         default:
           return game.score || '-';
       }
@@ -291,8 +299,37 @@ export default {
     formatGameDate(timestamp) {
       if (!timestamp) return '未知时间';
       
-      const date = new Date(timestamp);
+      // 处理字符串格式的时间戳 "2025-05-31 22:38:36"
+      const date = new Date(timestamp.replace(/-/g, '/'));
+      if (isNaN(date.getTime())) return '未知时间';
+      
       return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    },
+    
+    // 计算游戏时长
+    calculateGameDuration(createTime, updateTime, gameState) {
+      if (!createTime) return '未知';
+      
+      // 如果游戏还在进行中，使用当前时间
+      const endTime = (gameState === 1 || !updateTime) ? new Date() : new Date(updateTime.replace(/-/g, '/'));
+      const startTime = new Date(createTime.replace(/-/g, '/'));
+      
+      if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+        return '未知';
+      }
+      
+      const durationMs = endTime.getTime() - startTime.getTime();
+      const durationMinutes = Math.floor(durationMs / (1000 * 60));
+      
+      if (durationMinutes < 1) {
+        return '< 1 min';
+      } else if (durationMinutes < 60) {
+        return `${durationMinutes} min`;
+      } else {
+        const hours = Math.floor(durationMinutes / 60);
+        const minutes = durationMinutes % 60;
+        return `${hours}h ${minutes}m`;
+      }
     },
     
     // 跳转到回放界面

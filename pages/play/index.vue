@@ -146,6 +146,7 @@
 <script>
 import TopSpacing from '@/components/TopSpacing.vue'
 import UniPopup from '@/components/uni-popup/uni-popup.vue'
+import { initGame, moveChess, getChessMovesHistory, updateGameStatus, enterGame, getHistoryGamesList } from '@/api/game';
 
 export default {
   components: {
@@ -237,10 +238,11 @@ export default {
       }
     },
     // 处理底部工具点击
-    handleToolClick(type) {
+    async handleToolClick(type) {
       switch (type) {
         case 'history':
-          // 打开历史弹窗
+          // 获取历史对局数据并打开弹窗
+          await this.loadHistoryGames();
           this.$refs.historyPopup.open();
           break;
         case 'rank':
@@ -248,6 +250,49 @@ export default {
           this.$refs.rankPopup.open();
           break;
       }
+    },
+    // 加载历史对局数据
+    async loadHistoryGames() {
+      try {
+        uni.showLoading({ title: '加载中...' });
+        const response = await getHistoryGamesList({
+          pageNo: 1,
+          pageSize: 20
+        });
+        
+        if (response.success && response.result && response.result.records) {
+          // 将后端数据格式化为前端需要的格式
+          this.historyGames = response.result.records.map(game => ({
+            id: game.id,
+            player1: game.whitePlayerName || '白方玩家',
+            rating1: game.whitePlayerRating || '0',
+            player2: game.blackPlayerName || '黑方玩家', 
+            rating2: game.blackPlayerRating || '0',
+            score: this.formatGameResult(game.gameResult),
+            duration: this.formatGameDuration(game.gameDuration)
+          }));
+        }
+      } catch (error) {
+        console.error('获取历史对局失败:', error);
+        uni.showToast({ title: '获取历史对局失败', icon: 'none' });
+      } finally {
+        uni.hideLoading();
+      }
+    },
+    // 格式化游戏结果
+    formatGameResult(result) {
+      switch (result) {
+        case 'WHITE_WIN': return '1-0';
+        case 'BLACK_WIN': return '0-1';
+        case 'DRAW': return '½-½';
+        default: return '进行中';
+      }
+    },
+    // 格式化游戏时长
+    formatGameDuration(duration) {
+      if (!duration) return '未知';
+      const minutes = Math.floor(duration / 60);
+      return `${minutes} min`;
     },
     // 跳转到回放页面
     gotoReplay(gameId) {
@@ -598,4 +643,4 @@ export default {
     }
   }
 }
-</style> 
+</style>

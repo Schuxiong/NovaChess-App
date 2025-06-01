@@ -73,4 +73,17 @@ export function getGameReplayRecords(gameId) {
     url: `/game/chessGame/replay/${gameId}`,
     method: 'get'
   })
-} 
+}
+
+/**
+ * 获取历史对局列表
+ * @param {Object} params 查询参数 {pageNo, pageSize, ...}
+ * @returns {Promise}
+ */
+export function getHistoryGamesList(params) {
+  return request({
+    url: '/game/chessGame/list',
+    method: 'get',
+    params
+  })
+}

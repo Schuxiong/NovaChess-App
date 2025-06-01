@@ -74,7 +74,7 @@ export function subscribeToTopic(topic, callback) {
     const subscription = stompClient.subscribe(topic, (message) => {
       let parsedMessage = {};
       try {
-        console.log(`收到原始消息(${topic}):`, message.body);
+       // console.log(`收到原始消息(${topic}):`, message.body);
         parsedMessage = JSON.parse(message.body);
       } catch (e) {
         console.error('无法解析收到的消息体:', message.body, e);
