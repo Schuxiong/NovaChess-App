@@ -1,285 +1,507 @@
+# WebSocket 调用说明文档
 
-好的，这是关于您后端 WebSocket 设计的详细说明，以及前端 Vue2-uniapp 项目如何调用此服务的指南。我们将参考您提供的链接，并结合您后端 STOMP over WebSocket 的实际情况进行说明。
+## 概述
 
-## 后端 WebSocket 设计概述
+本文档详细说明了象棋游戏中投降和和棋功能的 WebSocket 实时通知机制。这些功能通过 WebSocket 实现双向实时通信，确保所有相关玩家能够及时收到游戏状态变化的通知。
 
-您的后端采用 Spring WebSocket 构建，并使用 STOMP 协议在 WebSocket 之上进行消息传递。主要配置和组件如下：
+## WebSocket 连接配置
 
-1.  **WebSocket 配置 (`WebChessSocketConfig.java`)**:
-    *   通过 `@EnableWebSocketMessageBroker` 注解启用 STOMP 支持。
-    *   注册 STOMP 端点：客户端将连接到 `/ws`。该端点还配置了 `withSockJS()`，以提供备选连接方案，增强兼容性。
-    *   配置消息代理（Message Broker）:
-        *   `registry.enableSimpleBroker("/topic")`: 定义了消息代理的前缀。客户端将订阅以此开头的目标（例如 `/topic/game/{gameId}`）来接收消息。
-        *   `registry.setApplicationDestinationPrefixes("/app")`: 定义了应用目标的前缀。客户端发送给服务器处理的消息，其目标将以此开头（例如 `/app/game/move/{gameId}`）。
-
-2.  **消息处理控制器**:
-    *   **`ChessMoveWebsocketController.java`**: 包含处理客户端发送的棋步等游戏相关消息的方法。这些方法通常使用 `@MessageMapping` 注解（例如 `@MessageMapping("/game/move/{gameId}")`），这意味着发送到 `/app/game/move/{gameId}` 的消息会由相应方法处理。
-    *   该控制器使用 `SimpMessagingTemplate` 将游戏更新（如棋步）广播给订阅了特定游戏主题（如 `/topic/game/{gameId}`）的客户端。
-    *   **`ChessGameController.java`**: 在玩家通过 HTTP POST 请求成功进入游戏后（`gameEnter` 方法），也会使用 `SimpMessagingTemplate` 向 `/topic/game/{gameId}` 发送一个 "PLAYER_JOINED" 类型的消息，通知其他客户端有新玩家加入。
-
-## 前端 uniapp 调用 WebSocket 服务指南
-
-由于后端使用的是 STOMP over WebSocket (并启用了 SockJS)，前端直接使用 uniapp 的原生 `uni.connectSocket` API 来处理 STOMP 协议会比较复杂。推荐使用专门的 STOMP 客户端库，如 `stompjs` (配合 `sockjs-client` 使用，因为后端配置了 SockJS)。
-
-以下是前端接入的步骤和建议：
-
-### 1. 安装所需库
-
-在您的 uniapp 项目中，您可能需要通过 npm 或 yarn 安装 `sockjs-client` 和 `@stomp/stompjs`：
-
-```bash
-npm install sockjs-client @stomp/stompjs
-# 或者
-yarn add sockjs-client @stomp/stompjs
+### 连接地址
+```javascript
+const WEBSOCKET_URL = process.env.NODE_ENV === 'production' 
+  ? 'http://47.111.122.119:8080/ws' 
+  : 'http://localhost:8080/ws';
 ```
 
-### 2. 封装 WebSocket 服务
-
-建议在 uniapp 项目中创建一个专门的 WebSocket 服务模块（例如 `utils/websocket.js` 或集成到 Vuex store 中，类似您提供的参考链接中的做法）。
+### 连接方式
+使用 SockJS + STOMP 协议进行连接：
 
 ```javascript
-// utils/websocket.js (示例)
-import SockJS from 'sockjs-client/dist/sockjs.min.js'; // 根据实际安装路径调整
-import { Client } from '@stomp/stompjs';
+import { connectWebSocket, subscribeToTopic, sendMessage, disconnectWebSocket } from '@/utils/websocket.js';
 
-let stompClient = null;
-let subscriptions = {}; // 用于存储订阅，方便后续取消
-
-const WEBSOCKET_URL = 'YOUR_BACKEND_BASE_URL/ws'; // 替换为您的后端实际地址，例如 http://localhost:8080/ws
-
-export function connectWebSocket(userId, onConnectedCallback, onErrorCallback) {
-  if (stompClient && stompClient.connected) {
-    console.log('WebSocket 已连接');
-    if (onConnectedCallback) onConnectedCallback();
-    return;
-  }
-
-  // 1. 创建 SockJS 连接
-  const socket = new SockJS(WEBSOCKET_URL);
-
-  // 2. 创建 STOMP 客户端实例
-  stompClient = new Client({
-    webSocketFactory: () => socket, // 将 SockJS 实例作为 WebSocket 工厂
-    connectHeaders: {
-      // 可以添加认证相关的头，例如 token
-      // login: 'user',
-      // passcode: 'password',
-      // Authorization: 'Bearer your_jwt_token'
-    },
-    debug: function (str) {
-      console.log('STOMP Debug: ' + str);
-    },
-    reconnectDelay: 5000, // 自动重连延迟（毫秒）
-    heartbeatIncoming: 4000, // 期望从服务器接收心跳的间隔
-    heartbeatOutgoing: 4000, // 向服务器发送心跳的间隔
-  });
-
-  // 3. STOMP 连接成功回调
-  stompClient.onConnect = (frame) => {
-    console.log('STOMP 连接成功:', frame);
-    if (onConnectedCallback) onConnectedCallback(stompClient);
-    // 可以在这里进行一些全局订阅，或者由调用方在回调中处理
-  };
-
-  // 4. STOMP 错误回调
-  stompClient.onStompError = (frame) => {
-    console.error('STOMP Broker reported error: ' + frame.headers['message']);
-    console.error('Additional details: ' + frame.body);
-    if (onErrorCallback) onErrorCallback(frame);
-  };
-
-  stompClient.onWebSocketError = (error) => {
-    console.error('WebSocket Error', error);
-    if (onErrorCallback) onErrorCallback(error);
-  };
-
-  // 5. 激活连接
-  stompClient.activate();
-}
-
-// 订阅主题
-export function subscribeToTopic(topic, callback) {
-  if (stompClient && stompClient.connected) {
-    console.log(`尝试订阅: ${topic}`);
-    const subscription = stompClient.subscribe(topic, (message) => {
-      let parsedMessage = {};
-      try {
-        parsedMessage = JSON.parse(message.body);
-      } catch (e) {
-        console.error('无法解析收到的消息体:', message.body, e);
-        parsedMessage = message.body; // 作为原始字符串处理
+// 连接 WebSocket
+connectWebSocket(
+  userId,
+  (client) => {
+    console.log('WebSocket连接成功:', client);
+    // 订阅游戏频道
+    subscribeToTopic(
+      `/topic/game/${gameId}`,
+      (message) => {
+        handleWebSocketMessage(message);
       }
-      if (callback) callback(parsedMessage);
-    });
-    subscriptions[topic] = subscription; // 保存订阅对象，方便取消
-    return subscription;
-  } else {
-    console.error('STOMP 未连接，无法订阅 ' + topic);
-    return null;
+    );
+  },
+  (error) => {
+    console.error('WebSocket连接错误:', error);
   }
-}
-
-// 取消订阅
-export function unsubscribeFromTopic(topic) {
-  if (subscriptions[topic]) {
-    subscriptions[topic].unsubscribe();
-    delete subscriptions[topic];
-    console.log(`已取消订阅: ${topic}`);
-  } 
-}
-
-// 发送消息
-export function sendMessage(destination, body) {
-  if (stompClient && stompClient.connected) {
-    stompClient.publish({
-      destination: destination, // 例如: /app/game/move/{gameId}
-      body: JSON.stringify(body), // 消息体通常是 JSON 字符串
-      // headers: { priority: '9' } // 可选的 STOMP 消息头
-    });
-  } else {
-    console.error('STOMP 未连接，无法发送消息到 ' + destination);
-  }
-}
-
-// 关闭连接
-export function disconnectWebSocket() {
-  if (stompClient) {
-    // 取消所有订阅
-    Object.keys(subscriptions).forEach(topic => {
-      subscriptions[topic].unsubscribe();
-    });
-    subscriptions = {};
-    stompClient.deactivate();
-    stompClient = null;
-    console.log('STOMP 连接已关闭');
-  }
-}
-
-// 获取 STOMP 客户端实例 (谨慎使用，尽量通过封装的方法操作)
-export function getStompClient() {
-  return stompClient;
-}
-
+);
 ```
 
-### 3. 在 Vue 组件中使用
+## 投降功能 WebSocket 通知
 
-在需要使用 WebSocket 的 Vue 组件中（例如游戏对战页面）：
+### 触发方式
+当玩家调用投降接口时：
+```
+POST /api/game/chessGame/quit/{gameId}
+```
 
-```vue
-<script>
-import {
-  connectWebSocket,
-  subscribeToTopic,
-  sendMessage,
-  disconnectWebSocket,
-  unsubscribeFromTopic
-} from '@/utils/websocket.js'; // 假设路径正确
+### WebSocket 通知消息格式
+
+#### 发送给对手的消息
+```json
+{
+  "type": "game_quit",
+  "gameId": "game123",
+  "quitPlayer": "black",
+  "winner": "white",
+  "message": "黑方退出游戏",
+  "gameState": 7
+}
+```
+
+#### 发送给投降方的确认消息
+```json
+{
+  "type": "game_quit",
+  "gameId": "game123",
+  "quitPlayer": "black",
+  "winner": "white",
+  "message": "您已投降",
+  "gameState": 7
+}
+```
+
+### 字段说明
+- `type`: 消息类型，固定为 "game_quit"
+- `gameId`: 游戏ID
+- `quitPlayer`: 投降的玩家（"black" 或 "white"）
+- `winner`: 获胜方（"black" 或 "white"）
+- `message`: 描述信息
+- `gameState`: 游戏状态（7=黑方投降，8=白方投降）
+
+## 和棋功能 WebSocket 通知
+
+### 1. 发起和棋请求
+
+#### 触发方式
+```
+POST /api/game/chessGame/draw/request/{gameId}
+```
+
+#### WebSocket 通知消息
+
+**发送给目标玩家（收到和棋请求）：**
+```json
+{
+  "type": "draw_request",
+  "gameId": "game123",
+  "requestUserId": "user1",
+  "requestUserAccount": "player1",
+  "targetUserId": "user2",
+  "targetUserAccount": "player2",
+  "requestId": "draw123",
+  "message": "player1 发起了和棋请求"
+}
+```
+
+**发送给请求方（确认请求已发送）：**
+```json
+{
+  "type": "draw_request_sent",
+  "gameId": "game123",
+  "message": "和棋请求已发送"
+}
+```
+
+### 2. 响应和棋请求
+
+#### 触发方式
+```
+POST /api/game/chessGame/draw/respond/{gameId}?accept=true/false
+```
+
+#### WebSocket 通知消息
+
+**接受和棋请求：**
+```json
+{
+  "type": "draw_accepted",
+  "gameId": "game123",
+  "message": "和棋请求已被接受，游戏结束",
+  "gameState": 5
+}
+```
+
+**拒绝和棋请求：**
+```json
+{
+  "type": "draw_rejected",
+  "gameId": "game123",
+  "message": "和棋请求已被拒绝"
+}
+```
+
+### 3. 取消和棋请求
+
+#### 触发方式
+```
+DELETE /api/game/chessGame/draw/cancel/{gameId}
+```
+
+#### WebSocket 通知消息
+```json
+{
+  "type": "draw_request_cancelled",
+  "gameId": "game123",
+  "message": "player1 取消了和棋请求"
+}
+```
+
+## 超时流局 WebSocket 通知
+
+### 触发方式
+```
+POST /api/game/chessGame/timeout/{gameId}
+```
+
+### WebSocket 通知消息
+```json
+{
+  "type": "game_timeout",
+  "gameId": "game123",
+  "message": "游戏超时，流局",
+  "gameState": 6
+}
+```
+
+## 前端 WebSocket 消息处理示例
+
+### Vue.js 组合式 API 示例
+
+```javascript
+import { ref, onMounted, onUnmounted } from 'vue'
+import { connectWebSocket, subscribeToTopic, disconnectWebSocket } from '@/utils/websocket.js'
 
 export default {
-  data() {
-    return {
-      gameId: null, // 从路由参数或状态管理获取
-      userId: null, // 当前用户ID
-      gameSubscription: null
-    };
-  },
-  onLoad(options) {
-    this.gameId = options.gameId; // 假设 gameId 通过页面参数传递
-    this.userId = uni.getStorageSync('userId'); // 假设 userId 存储在本地
-
-    this.connectAndSubscribe();
-  },
-  onUnload() {
-    // 页面卸载时取消订阅并断开连接
-    if (this.gameSubscription) {
-        // stompjs v5+ 的 unsubscribe 是在 subscription 对象上的方法
-        // this.gameSubscription.unsubscribe(); // 或者通过封装的 unsubscribeFromTopic
-        unsubscribeFromTopic(`/topic/game/${this.gameId}`);
+  setup() {
+    const gameEnded = ref(false)
+    const gameEndMessage = ref('')
+    const drawRequest = ref(null)
+    const webSocketConnected = ref(false)
+    
+    // WebSocket 消息处理函数
+    const handleWebSocketMessage = (message) => {
+      console.log('收到 WebSocket 消息:', message)
+      
+      switch (message.type) {
+        case 'game_quit':
+          gameEnded.value = true
+          gameEndMessage.value = `${message.quitPlayer === 'black' ? '黑方' : '白方'} 已投降，${message.winner === 'black' ? '黑方' : '白方'} 获胜`
+          drawRequest.value = null // 清除和棋请求状态
+          alert(gameEndMessage.value)
+          break
+          
+        case 'game_timeout':
+          gameEnded.value = true
+          gameEndMessage.value = '游戏超时，流局'
+          drawRequest.value = null
+          alert(gameEndMessage.value)
+          break
+          
+        case 'draw_request':
+          // 收到和棋请求，刷新状态
+          getDrawStatus()
+          alert(`${message.requestUserAccount} 发起了和棋请求`)
+          break
+          
+        case 'draw_request_sent':
+          // 和棋请求已发送确认
+          getDrawStatus()
+          break
+          
+        case 'draw_accepted':
+          gameEnded.value = true
+          gameEndMessage.value = '双方同意和棋，游戏结束'
+          drawRequest.value = null
+          alert(gameEndMessage.value)
+          break
+          
+        case 'draw_rejected':
+          drawRequest.value = null
+          alert('对方拒绝了和棋请求')
+          break
+          
+        case 'draw_request_cancelled':
+          drawRequest.value = null
+          alert(message.message)
+          break
+          
+        default:
+          console.log('未处理的消息类型:', message.type)
+      }
     }
-    // 根据需要决定是否在页面卸载时断开全局连接
-    // disconnectWebSocket(); 
-  },
-  methods: {
-    connectAndSubscribe() {
+    
+    // 初始化 WebSocket 连接
+    const initWebSocket = (gameId, userId) => {
       connectWebSocket(
-        this.userId,
-        (stompClientInstance) => {
-          // 连接成功后的回调
-          console.log('WebSocket 连接成功，准备订阅游戏主题');
-          this.subscribeToGameEvents();
+        userId,
+        (client) => {
+          console.log('WebSocket 连接成功')
+          webSocketConnected.value = true
+          
+          // 订阅游戏频道
+          subscribeToTopic(
+            `/topic/game/${gameId}`,
+            handleWebSocketMessage
+          )
         },
         (error) => {
-          // 连接失败后的回调
-          console.error('WebSocket 连接失败:', error);
-          uni.showToast({
-            title: '实时服务连接失败',
-            icon: 'none'
-          });
+          console.error('WebSocket 连接失败:', error)
+          webSocketConnected.value = false
         }
-      );
-    },
-
-    subscribeToGameEvents() {
-      if (!this.gameId) return;
-      const topic = `/topic/game/${this.gameId}`;
-      this.gameSubscription = subscribeToTopic(topic, (message) => {
-        console.log(`收到来自 ${topic} 的消息:`, message);
-        // 根据 message.type 处理不同类型的游戏事件
-        if (message.type === 'PLAYER_JOINED') {
-          uni.showToast({
-            title: `玩家 ${message.username} 加入了游戏！`,
-            icon: 'none'
-          });
-          // 更新游戏内玩家列表等UI
-        } else if (message.type === 'MOVE_MADE') {
-          // 处理棋步更新
-          // message.moveData 包含了棋步信息
-          this.updateBoard(message.moveData);
-        } else if (message.type === 'GAME_STATE_UPDATE'){
-          // 处理完整的游戏状态更新
-          this.updateGameState(message.gameState);
-        }
-        // ... 其他消息类型处理
-      });
-    },
-
-    handlePlayerMove(moveData) {
-      if (!this.gameId) return;
-      // 前端玩家走棋后，通过 WebSocket 发送棋步信息
-      // 后端 ChessMoveWebsocketController 中 @MessageMapping("/game/move/{gameId}") 会接收
-      const destination = `/app/game/move/${this.gameId}`;
-      sendMessage(destination, {
-        userId: this.userId,
-        move: moveData, // 例如: { from: 'e2', to: 'e4', piece: 'P' }
-        // 其他需要传递的信息
-      });
-    },
+      )
+    }
     
-    updateBoard(moveData) {
-        // 根据接收到的棋步数据更新前端棋盘UI
-        console.log('更新棋盘:', moveData);
-    },
-
-    updateGameState(gameState) {
-        // 根据接收到的完整游戏状态更新前端UI
-        console.log('更新游戏状态:', gameState);
+    // 获取和棋请求状态
+    const getDrawStatus = async () => {
+      try {
+        const response = await fetch(`/api/game/chessGame/draw/status/${gameId}`, {
+          headers: {
+            'Authorization': `Bearer ${getToken()}`
+          }
+        })
+        const result = await response.json()
+        if (result.success) {
+          drawRequest.value = result.result
+        }
+      } catch (error) {
+        console.error('获取和棋状态失败:', error)
+      }
+    }
+    
+    // 组件卸载时断开连接
+    onUnmounted(() => {
+      if (webSocketConnected.value) {
+        disconnectWebSocket()
+      }
+    })
+    
+    return {
+      gameEnded,
+      gameEndMessage,
+      drawRequest,
+      webSocketConnected,
+      initWebSocket,
+      handleWebSocketMessage
     }
   }
-};
-</script>
+}
 ```
 
-### 4. 关键点说明
+### JavaScript/TypeScript 示例
 
-*   **连接地址**：`WEBSOCKET_URL` 应指向您后端 `/ws` 端点，例如 `http://your-domain.com/api/ws` 或 `ws://your-domain.com/api/ws` (如果直接使用 WebSocket 而非 SockJS HTTP 升级，但 SockJS 通常更健壮)。由于 `sockjs-client` 通常需要 HTTP URL，所以使用 `http://` 或 `https://`。
-*   **STOMP 客户端库**：`@stomp/stompjs` (v5+) 是一个流行的 STOMP 客户端，它支持通过 `webSocketFactory` 传入自定义的 WebSocket 实现（这里是 SockJS）。
-*   **订阅目标 (`/topic/...`)**：前端通过 `stompClient.subscribe('/topic/game/' + this.gameId, callback)` 来接收特定游戏房间的消息。后端通过 `SimpMessagingTemplate.convertAndSend('/topic/game/' + gameId, messagePayload)` 来广播消息。
-*   **发送目标 (`/app/...`)**：前端通过 `stompClient.publish({ destination: '/app/game/move/' + this.gameId, body: JSON.stringify(payload) })` 来发送消息给服务器处理。后端对应的方法使用 `@MessageMapping` (例如 `@MessageMapping("/game/move/{gameId}")`) 来接收。
-*   **消息格式**：前后端需要约定好消息体的 JSON 结构。例如，加入游戏的通知可以包含 `{ type: 'PLAYER_JOINED', userId: '...', username: '...' }`，棋步消息可以包含 `{ type: 'MOVE_MADE', moveData: { ... } }`。
-*   **心跳**：`stompjs` 客户端库通常会自动处理 STOMP 级别的心跳，以保持连接活跃。配置中的 `heartbeatIncoming` 和 `heartbeatOutgoing` 用于此目的。
-*   **错误处理与重连**：`stompjs` 提供了错误回调和重连机制 (`reconnectDelay`)。
-*   **生命周期管理**：在组件创建/加载时建立连接和订阅，在组件销毁/卸载时取消订阅并根据需要断开连接，以避免内存泄漏和不必要的通信。
+```javascript
+class ChessGameWebSocket {
+  constructor(gameId, userId) {
+    this.gameId = gameId
+    this.userId = userId
+    this.stompClient = null
+    this.gameSubscription = null
+  }
+  
+  // 连接 WebSocket
+  connect() {
+    return new Promise((resolve, reject) => {
+      connectWebSocket(
+        this.userId,
+        (client) => {
+          this.stompClient = client
+          this.subscribeToGame()
+          resolve(client)
+        },
+        (error) => {
+          reject(error)
+        }
+      )
+    })
+  }
+  
+  // 订阅游戏频道
+  subscribeToGame() {
+    if (this.stompClient) {
+      this.gameSubscription = subscribeToTopic(
+        `/topic/game/${this.gameId}`,
+        (message) => {
+          this.handleMessage(message)
+        }
+      )
+    }
+  }
+  
+  // 处理 WebSocket 消息
+  handleMessage(message) {
+    console.log('收到消息:', message)
+    
+    // 触发自定义事件
+    const event = new CustomEvent('chessGameMessage', {
+      detail: message
+    })
+    document.dispatchEvent(event)
+    
+    // 根据消息类型处理
+    switch (message.type) {
+      case 'game_quit':
+        this.handleGameQuit(message)
+        break
+      case 'draw_request':
+        this.handleDrawRequest(message)
+        break
+      case 'draw_accepted':
+        this.handleDrawAccepted(message)
+        break
+      case 'draw_rejected':
+        this.handleDrawRejected(message)
+        break
+      case 'draw_request_cancelled':
+        this.handleDrawCancelled(message)
+        break
+      case 'game_timeout':
+        this.handleGameTimeout(message)
+        break
+    }
+  }
+  
+  // 处理投降消息
+  handleGameQuit(message) {
+    const winnerText = message.winner === 'black' ? '黑方' : '白方'
+    const quitPlayerText = message.quitPlayer === 'black' ? '黑方' : '白方'
+    alert(`${quitPlayerText} 已投降，${winnerText} 获胜`)
+  }
+  
+  // 处理和棋请求
+  handleDrawRequest(message) {
+    const confirmed = confirm(`${message.requestUserAccount} 发起了和棋请求，是否接受？`)
+    if (confirmed) {
+      this.respondDraw(true)
+    } else {
+      this.respondDraw(false)
+    }
+  }
+  
+  // 处理和棋被接受
+  handleDrawAccepted(message) {
+    alert('双方同意和棋，游戏结束')
+  }
+  
+  // 处理和棋被拒绝
+  handleDrawRejected(message) {
+    alert('对方拒绝了和棋请求')
+  }
+  
+  // 处理和棋请求被取消
+  handleDrawCancelled(message) {
+    alert(message.message)
+  }
+  
+  // 处理游戏超时
+  handleGameTimeout(message) {
+    alert('游戏超时，流局')
+  }
+  
+  // 响应和棋请求
+  async respondDraw(accept) {
+    try {
+      const response = await fetch(`/api/game/chessGame/draw/respond/${this.gameId}?accept=${accept}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${getToken()}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      const result = await response.json()
+      if (!result.success) {
+        alert('操作失败: ' + result.message)
+      }
+    } catch (error) {
+      console.error('响应和棋请求失败:', error)
+      alert('网络错误，请重试')
+    }
+  }
+  
+  // 断开连接
+  disconnect() {
+    if (this.stompClient) {
+      disconnectWebSocket()
+      this.stompClient = null
+      this.gameSubscription = null
+    }
+  }
+}
 
-这份指南应该能帮助您的前端 AI 助手理解如何与后端 WebSocket 服务进行集成。请务必根据项目的实际情况调整 URL、消息结构和错误处理逻辑。
-当前模型请求量过大，请求排队约 1 位，请稍候或切换至其他模型问答体验更流畅。
+// 使用示例
+const gameWebSocket = new ChessGameWebSocket('game123', 'user456')
+gameWebSocket.connect().then(() => {
+  console.log('WebSocket 连接成功')
+}).catch((error) => {
+  console.error('WebSocket 连接失败:', error)
+})
+
+// 监听自定义事件
+document.addEventListener('chessGameMessage', (event) => {
+  console.log('收到游戏消息:', event.detail)
+})
+```
+
+## 注意事项
+
+### 1. 连接管理
+- 确保在游戏开始时建立 WebSocket 连接
+- 游戏结束或页面卸载时及时断开连接
+- 处理连接断开和重连逻辑
+
+### 2. 消息处理
+- 所有 WebSocket 消息都是异步的，需要正确处理
+- 建议在收到通知后重新获取游戏状态以确保数据一致性
+- 对于关键操作（如投降、和棋），建议显示确认对话框
+
+### 3. 错误处理
+- 处理 WebSocket 连接失败的情况
+- 处理消息格式错误或缺失字段的情况
+- 提供用户友好的错误提示
+
+### 4. 安全考虑
+- 确保 WebSocket 连接使用正确的认证机制
+- 验证消息来源和内容的合法性
+- 避免在客户端存储敏感信息
+
+### 5. 性能优化
+- 避免重复订阅同一个频道
+- 及时清理不需要的订阅
+- 合理处理消息频率，避免界面卡顿
+
+## WebSocket 消息类型汇总
+
+| 消息类型 | 描述 | 触发条件 |
+|---------|------|----------|
+| `game_quit` | 玩家投降 | 调用投降接口 |
+| `game_timeout` | 游戏超时 | 调用超时接口 |
+| `draw_request` | 和棋请求 | 发起和棋请求 |
+| `draw_request_sent` | 和棋请求已发送 | 和棋请求发送确认 |
+| `draw_accepted` | 和棋被接受 | 接受和棋请求 |
+| `draw_rejected` | 和棋被拒绝 | 拒绝和棋请求 |
+| `draw_request_cancelled` | 和棋请求被取消 | 取消和棋请求 |
+| `GAME_OVER` | 游戏正常结束 | 吃王等正常结束 |
+| `MOVE_UPDATE` | 行棋更新 | 玩家行棋 |
+| `PLAYER_JOIN` | 玩家加入 | 玩家加入游戏 |
+
+## 技术支持
+
+如果在使用过程中遇到问题，请检查：
+1. WebSocket 服务器是否正常运行
+2. 网络连接是否稳定
+3. 认证令牌是否有效
+4. 游戏ID和用户ID是否正确
+
+更多技术细节请参考相关接口文档和源代码。

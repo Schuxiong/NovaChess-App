@@ -17,7 +17,7 @@
         <view class="list-cell list-cell-arrow">
           <view class="menu-item-box">
             <view>官方邮箱</view>
-            <view class="text-right">ruoyi@xx.com</view>
+            <view class="text-right">NovaChess@xx.com</view>
           </view>
         </view>
         <view class="list-cell list-cell-arrow">
@@ -38,7 +38,7 @@
     </view>
 
     <view class="copyright">
-      <view>Copyright &copy; 2025 ruoyi.vip All Rights Reserved.</view>
+      <view>Copyright &copy; 2025 NovaChess.vip All Rights Reserved.</view>
     </view>
   </view>
 </template>

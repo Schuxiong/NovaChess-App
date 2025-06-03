@@ -209,7 +209,14 @@ export default {
       try {
         const currentUser = uni.getStorageSync('userInfo');
         if (!currentUser || !currentUser.id) {
-          console.warn('未找到当前用户信息');
+          console.log('PlayerTab: 未找到当前用户信息，尝试从token获取');
+          // 尝试从其他地方获取用户信息
+          const token = uni.getStorageSync('token');
+          if (!token) {
+            console.log('PlayerTab: 未找到token，跳过好友列表加载');
+            return;
+          }
+          // 可以在这里添加通过token获取用户信息的逻辑
           return;
         }
         

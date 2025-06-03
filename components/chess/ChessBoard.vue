@@ -5,7 +5,7 @@
       <view v-for="(row, rowIndex) in 8" :key="rowIndex" class="board-row">
         <view 
           v-for="(col, colIndex) in 8" 
-          :key="colIndex" 
+          :key="cellKeys[`${getBoardRow(rowIndex)}-${getBoardCol(colIndex)}`] || `${rowIndex}-${colIndex}`" 
           class="board-cell"
           :class="{ 
             'light': (rowIndex + colIndex) % 2 === 0, 
@@ -66,6 +66,11 @@
     <view v-if="showCheckmateAnimation" class="checkmate-animation">
       <text class="checkmate-text">{{ checkmateText }}</text>
     </view>
+    
+    <!-- 游戏结束胜负标注 -->
+    <view v-if="gameEnded && gameResult" class="game-result-overlay">
+      <view class="game-result-text">{{ gameResult }}</view>
+    </view>
   </view>
 </template>
 
@@ -119,6 +124,14 @@ export default {
     configMode: {
       type: Boolean,
       default: false
+    },
+    gameResult: {
+      type: String,
+      default: ''
+    },
+    gameEnded: {
+      type: Boolean,
+      default: false
     }
   },
   data() {
@@ -146,12 +159,15 @@ export default {
       draggedPiece: null,          // 正在拖拽的棋子信息
       dragOverCell: null,          // 拖拽悬停的格子
       dragStartPosition: null,     // 拖拽开始的位置
-      isDragging: false            // 是否正在拖拽
+      isDragging: false,           // 是否正在拖拽
+      cellKeys: {}                 // 用于优化渲染的单元格key
     }
   },
   created() {
     // 初始化音频上下文
     this.initAudioContexts();
+    // 初始化棋盘单元格key
+    this.generateBoardKeys();
   },
   methods: {
     // 初始化音频上下文
@@ -172,6 +188,17 @@ export default {
         audioContext.autoplay = false;
         this.audioContexts[type] = audioContext;
       });
+    },
+    
+    // 生成棋盘单元格key，用于优化渲染
+    generateBoardKeys() {
+      this.cellKeys = {};
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const piece = this.boardState && this.boardState[row] && this.boardState[row][col] ? this.boardState[row][col] : 'empty';
+          this.cellKeys[`${row}-${col}`] = `${row}-${col}-${piece}`;
+        }
+      }
     },
     
     // 根据执棋颜色获取实际棋盘行（如果玩家执黑，棋盘需要翻转）
@@ -475,6 +502,37 @@ export default {
   },
   // 监听lastMove变化,自动播放移动音效
   watch: {
+    // 优化棋盘状态监听，避免整个棋盘重新渲染
+     boardState: {
+       handler(newBoard, oldBoard) {
+         if (!oldBoard || !newBoard) {
+           // 初始化时生成棋盘key
+           this.generateBoardKeys();
+           return;
+         }
+         
+         // 比较新旧棋盘状态，只更新变化的位置
+         const changedPositions = [];
+         for (let row = 0; row < 8; row++) {
+           for (let col = 0; col < 8; col++) {
+             if (newBoard[row][col] !== oldBoard[row][col]) {
+               changedPositions.push({ row, col, piece: newBoard[row][col] });
+               // 更新对应位置的key，基于棋子内容
+               const piece = newBoard[row][col] || 'empty';
+               this.$set(this.cellKeys, `${row}-${col}`, `${row}-${col}-${piece}`);
+             }
+           }
+         }
+         
+         // 如果有位置发生变化，触发局部更新事件
+         if (changedPositions.length > 0) {
+           console.log('棋盘位置变化:', changedPositions.length, '个位置');
+           this.$emit('board-changed', changedPositions);
+         }
+       },
+       deep: true // 需要深度监听二维数组
+     },
+    
     lastMove(newMove, oldMove) {
       if (!newMove || (oldMove && 
           newMove.from.row === oldMove.from.row && 
@@ -785,13 +843,15 @@ export default {
   // 将军/将杀动画
   .checkmate-animation {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 200;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     display: flex;
-    justify-content: center;
     align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    pointer-events: none;
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.6);
@@ -803,6 +863,34 @@ export default {
       text-align: center;
       text-shadow: 0 0 10rpx rgba(0, 0, 0, 0.5);
       animation: checkmate-text-animation 0.5s ease;
+    }
+  }
+  
+  .game-result-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    pointer-events: none;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+    
+    .game-result-text {
+      color: #ffffff;
+      font-size: 40rpx;
+      font-weight: bold;
+      text-align: center;
+      padding: 20rpx 40rpx;
+      background-color: rgba(0, 0, 0, 0.8);
+      border-radius: 20rpx;
+      text-shadow: 0 0 10rpx rgba(0, 0, 0, 0.8);
+      animation: game-result-animation 0.8s ease;
     }
   }
 }
@@ -854,6 +942,21 @@ export default {
   }
   to {
     transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes game-result-animation {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
   }
 }
 </style>

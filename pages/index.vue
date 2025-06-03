@@ -38,15 +38,15 @@
       </view>
       <view class="stats-item">
         <text class="stats-label">场次</text>
-        <text class="stats-value">129</text>
+        <text class="stats-value">{{gameStatistics.totalGames}}</text>
       </view>
       <view class="stats-item">
         <text class="stats-label">积分</text>
-        <text class="stats-value">335</text>
+        <text class="stats-value">{{gameStatistics.currentScore}}</text>
       </view>
       <view class="stats-item">
         <text class="stats-label">胜率</text>
-        <text class="stats-value">50.5%</text>
+        <text class="stats-value">{{gameStatistics.winRate}}%</text>
       </view>
     </view>
     
@@ -61,106 +61,41 @@
         <view class="table-header">
           <text class="cell-player">棋手</text>
           <text class="cell-result">结果</text>
-          <text class="cell-steps">步数</text>
           <text class="cell-date">日期</text>
         </view>
         
-        <!-- 对局记录1 -->
-        <view class="match-record" @tap="goToReplay('match1')">
-          <view class="match-players">
-            <view class="match-row">
-              <view class="cell-player">
-                <view class="player-indicator win"></view>
-                <view class="player-info">
-                  <text class="player-name">NikoTheodo</text>
-                  <text class="player-rating">(3072)</text>
-                </view>
-              </view>
-              <text class="cell-result">1</text>
-              <text class="cell-steps">25</text>
-              <text class="cell-date">25-03-26</text>
-            </view>
-            <view class="match-row opponent">
-              <view class="cell-player">
-                <view class="player-indicator lose"></view>
-                <view class="player-info">
-                  <text class="player-name">theloyalwolf</text>
-                  <text class="player-rating">(2952)</text>
-                </view>
-              </view>
-              <text class="cell-result">0</text>
-              <text class="cell-steps"></text>
-              <text class="cell-date"></text>
-            </view>
-          </view>
-          <view class="match-result win">
-            <text class="result-text">胜</text>
-          </view>
+        <!-- 动态对局记录 -->
+        <view v-if="historyGames.length === 0" class="no-games">
+          <text class="no-games-text">暂无历史对局</text>
         </view>
         
-        <!-- 对局记录2 -->
-        <view class="match-record" @tap="goToReplay('match2')">
+        <view v-for="(game) in historyGames" :key="game.id" class="match-record" @tap="goToReplay(game.id)">
           <view class="match-players">
             <view class="match-row">
               <view class="cell-player">
-                <view class="player-indicator win"></view>
+                <view class="player-indicator" :class="game.whitePlayer.result === 1 ? 'win' : game.whitePlayer.result === 0.5 ? 'draw' : 'lose'"></view>
                 <view class="player-info">
-                  <text class="player-name">NikoTheodo</text>
-                  <text class="player-rating">(3072)</text>
+                  <text class="player-name">{{game.whitePlayer.name}}</text>
+                  <text class="player-rating">({{game.whitePlayer.rating}})</text>
                 </view>
               </view>
-              <text class="cell-result">1</text>
-              <text class="cell-steps">25</text>
-              <text class="cell-date">25-03-26</text>
+              <text class="cell-result">{{game.whitePlayer.result}}</text>
+              <text class="cell-date">{{game.date}}</text>
             </view>
             <view class="match-row opponent">
               <view class="cell-player">
-                <view class="player-indicator lose"></view>
+                <view class="player-indicator" :class="game.blackPlayer.result === 1 ? 'win' : game.blackPlayer.result === 0.5 ? 'draw' : 'lose'"></view>
                 <view class="player-info">
-                  <text class="player-name">theloyalwolf</text>
-                  <text class="player-rating">(2952)</text>
+                  <text class="player-name">{{game.blackPlayer.name}}</text>
+                  <text class="player-rating">({{game.blackPlayer.rating}})</text>
                 </view>
               </view>
-              <text class="cell-result">0</text>
-              <text class="cell-steps"></text>
+              <text class="cell-result">{{game.blackPlayer.result}}</text>
               <text class="cell-date"></text>
             </view>
           </view>
-          <view class="match-result lose">
-            <text class="result-text">负</text>
-          </view>
-        </view>
-        
-        <!-- 对局记录3 -->
-        <view class="match-record" @tap="goToReplay('match3')">
-          <view class="match-players">
-            <view class="match-row">
-              <view class="cell-player">
-                <view class="player-indicator win"></view>
-                <view class="player-info">
-                  <text class="player-name">NikoTheodo</text>
-                  <text class="player-rating">(3072)</text>
-                </view>
-              </view>
-              <text class="cell-result">1</text>
-              <text class="cell-steps">25</text>
-              <text class="cell-date">25-03-26</text>
-            </view>
-            <view class="match-row opponent">
-              <view class="cell-player">
-                <view class="player-indicator lose"></view>
-                <view class="player-info">
-                  <text class="player-name">theloyalwolf</text>
-                  <text class="player-rating">(2952)</text>
-                </view>
-              </view>
-              <text class="cell-result">0</text>
-              <text class="cell-steps"></text>
-              <text class="cell-date"></text>
-            </view>
-          </view>
-          <view class="match-result win">
-            <text class="result-text">胜</text>
+          <view class="match-result" :class="getGameResultClass(game.gameResult)">
+            <text class="result-text">{{getGameResultText(game.gameResult)}}</text>
           </view>
         </view>
       </view>
@@ -177,6 +112,8 @@
 <script>
 import TopSpacing from '@/components/TopSpacing.vue'
 import { getUserData } from '@/api/system/user'
+import { getMyGameHistory } from '@/api/game'
+import { getCurrentUserGameStatistics } from '@/api/score'
 
 export default {
   components: {
@@ -191,6 +128,12 @@ export default {
         realname: '',
         signature: '',
         registerDate: ''
+      },
+      historyGames: [],
+      gameStatistics: {
+        totalGames: 0,
+        currentScore: 0,
+        winRate: 0
       }
     }
   },
@@ -201,6 +144,12 @@ export default {
     
     // 获取用户信息
     this.getUserInfo()
+    
+    // 获取历史对局
+    this.getHistoryGames()
+    
+    // 获取对局统计
+    this.getGameStatistics()
   },
   methods: {
     async getUserInfo() {
@@ -217,6 +166,21 @@ export default {
         }
       } catch (error) {
         console.error('获取用户信息失败:', error)
+      }
+    },
+    async getGameStatistics() {
+      try {
+        const res = await getCurrentUserGameStatistics()
+        if (res.success && res.result) {
+          this.gameStatistics = {
+            totalGames: res.result.totalGames || 0,
+            currentScore: res.result.currentScore || 0,
+            winRate: res.result.winRate ? res.result.winRate.toFixed(1) : '0.0'
+          }
+        }
+      } catch (error) {
+        console.error('获取对局统计失败:', error)
+        // 保持默认值
       }
     },
     handleLogout() {
@@ -238,27 +202,104 @@ export default {
         }
       });
     },
+    async getHistoryGames() {
+      try {
+        const res = await getMyGameHistory({
+          pageNo: 1,
+          pageSize: 20,
+          userId: 'e9ca23d68d884d4ebb19d07889727dae'
+        })
+        
+        if (res.success && res.result && res.result.records) {
+          this.historyGames = res.result.records.map(game => {
+            // 根据游戏状态判断结果
+            let gameResult = '进行中'
+            let whiteResult = 0
+            let blackResult = 0
+            
+            if (game.gameState === 1) { // 游戏结束
+              // 这里需要根据实际的胜负判断逻辑来设置结果
+              // 暂时设置为平局，实际应该根据API文档或后端逻辑判断
+              gameResult = 'DRAW'
+              whiteResult = 0.5
+              blackResult = 0.5
+            }
+            
+            return {
+              id: game.id,
+              whitePlayer: {
+                name: game.whitePlayAccount || 'Unknown',
+                rating: game.whitePlayerScore || 0,
+                result: whiteResult
+              },
+              blackPlayer: {
+                name: game.blackPlayAccount || 'Unknown', 
+                rating: game.blackPlayerScore || 0,
+                result: blackResult
+              },
+              date: this.formatDate(game.createTime),
+              gameResult: gameResult
+            }
+          })
+        }
+      } catch (error) {
+        console.error('获取历史对局失败:', error)
+        // 如果API失败，使用默认数据
+        this.historyGames = []
+      }
+    },
+    formatDate(dateString) {
+      if (!dateString) return ''
+      const date = new Date(dateString)
+      const year = date.getFullYear().toString().slice(-2)
+      const month = (date.getMonth() + 1).toString().padStart(2, '0')
+      const day = date.getDate().toString().padStart(2, '0')
+      return `${year}-${month}-${day}`
+    },
     goToEdit() {
       uni.navigateTo({
         url: '/pages/mine/info/edit'
       });
     },
-    goToReplay(matchId) {
-      console.log('跳转到回看界面:', matchId)
-      uni.navigateTo({
-        url: `/pages/play/replay/index?id=${matchId}`,
-        success: () => {
-          console.log('跳转成功')
-        },
-        fail: (err) => {
-          console.error('跳转失败:', err)
-          uni.showToast({
-            title: '跳转失败',
-            icon: 'none'
-          })
-        }
-      })
-    }
+     getGameResultClass(gameResult) {
+       switch(gameResult) {
+         case 'WHITE_WIN':
+         case 'BLACK_WIN':
+           return 'win'
+         case 'DRAW':
+           return 'draw'
+         default:
+           return 'lose'
+       }
+     },
+     getGameResultText(gameResult) {
+       switch(gameResult) {
+         case 'WHITE_WIN':
+           return '胜'
+         case 'BLACK_WIN':
+           return '负'
+         case 'DRAW':
+           return '和'
+         default:
+           return '负'
+       }
+     },
+     goToReplay(gameId) {
+       console.log('跳转到回看界面:', gameId)
+       uni.navigateTo({
+         url: `/pages/play/replay/index?id=${gameId}`,
+         success: () => {
+           console.log('跳转成功')
+         },
+         fail: (err) => {
+           console.error('跳转失败:', err)
+           uni.showToast({
+             title: '跳转失败',
+             icon: 'none'
+           })
+         }
+       })
+     }
   }
 }
 </script>
@@ -475,6 +516,26 @@ export default {
             font-weight: bold;
           }
         }
+        
+        &.draw {
+          .result-text {
+            color: #f39c12;
+            font-size: 22rpx;
+            font-weight: bold;
+          }
+        }
+      }
+    }
+    
+    .no-games {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 60rpx 0;
+      
+      .no-games-text {
+        color: #999;
+        font-size: 28rpx;
       }
     }
     
@@ -506,6 +567,10 @@ export default {
           
           &.lose {
             background-color: #a2a2a2;
+          }
+          
+          &.draw {
+            background-color: #f39c12;
           }
         }
         

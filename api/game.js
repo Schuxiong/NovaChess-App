@@ -70,7 +70,7 @@ export function updateGameStatus(data) {
  */
 export function getGameReplayRecords(gameId) {
   return request({
-    url: `/game/chessGame/replay/${gameId}`,
+    url: `/game/chessGame/replay/complete/${gameId}`,
     method: 'get'
   })
 }
@@ -103,14 +103,11 @@ export function getHistoryGamesList(params) {
  */
 export function getMyGameHistory(params) {
   return request({
-    url: '/chess/chessGame/list',
+    url: '/game/chessGame/list',
     method: 'get',
     params: {
       pageNo: params.pageNo || 1,
       pageSize: params.pageSize || 10,
-      // 可以通过blackPlayId或whitePlayId筛选当前用户的对局
-      blackPlayId: params.userId,
-      whitePlayId: params.userId,
       ...params
     }
   })

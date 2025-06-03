@@ -128,4 +128,27 @@ export function deletePlayerScoreRecord(id) {
     method: 'delete',
     params: { id }
   })
-} 
+}
+
+/**
+ * 获取当前用户的对局统计信息
+ * @returns {Promise}
+ */
+export function getCurrentUserGameStatistics() {
+  return request({
+    url: '/statistics/userGame/current',
+    method: 'get'
+  })
+}
+
+/**
+ * 获取指定用户的对局统计信息
+ * @param {String} userId 用户ID
+ * @returns {Promise}
+ */
+export function getUserGameStatistics(userId) {
+  return request({
+    url: `/statistics/userGame/user/${userId}`,
+    method: 'get'
+  })
+}

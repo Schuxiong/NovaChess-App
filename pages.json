@@ -215,7 +215,7 @@
   },
   "globalStyle": {
     "navigationBarTextStyle": "black",
-    "navigationBarTitleText": "RuoYi",
+    "navigationBarTitleText": "NovaChess",
     "navigationBarBackgroundColor": "#FFFFFF"
   }
 }

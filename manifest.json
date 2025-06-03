@@ -67,7 +67,7 @@
                 }
             }
         },
-        "title" : "RuoYi-App",
+        "title" : "NovaChess-App",
         "router" : {
             "mode" : "hash",
             "base" : "./"
