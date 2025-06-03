@@ -18,7 +18,14 @@
     <!-- 搜索框 -->
     <view class="search-bar">
       <image class="search-icon" src="/static/images/match/search.png" mode="aspectFit"></image>
-      <input class="search-input" placeholder="通过名称搜索用户" placeholder-style="color: rgba(255,255,255,0.5);" />
+      <input 
+        class="search-input" 
+        placeholder="通过名称搜索用户" 
+        placeholder-style="color: rgba(255,255,255,0.5);" 
+        v-model="searchText"
+        @input="onSearchInput"
+        @confirm="onSearchConfirm"
+      />
     </view>
     
     <!-- 好友列表 -->
@@ -100,7 +107,12 @@
 </template>
 
 <script>
+import { listChessFriendPair } from '@/api/pair'
+import { getUserData, getUserList } from '@/api/system/user'
+import { getFriendChooseList, searchFriends } from '@/api/friend'
+
 export default {
+  name: 'PlayerTab',
   props: {
     playersList: {
       type: Array,
@@ -112,92 +124,22 @@ export default {
       activeSubTab: 'friends', // 默认显示我的好友
       selectedPlayer: null,    // 当前选中的玩家
       isPlayerFriend: false,   // 选中的玩家是否是好友
-      friendsList: [
-        { 
-          id: 1, 
-          name: 'Bigfish1995', 
-          rating: '2807', 
-          avatar: '/static/images/match/avatar-default.png',
-          flag: 'https://pic1.imgdb.cn/item/67f3c5ffe381c3632bee9012.png',
-          status: '对战中',
-          isVip: true,
-          title: 'GM',
-          signature: '这个地方是个性签名...',
-          onlineStatus: 'Online Now',
-          registerDate: 'Nov 12, 2023'
-        },
-        { 
-          id: 2, 
-          name: 'CogieMekutune', 
-          rating: '2799', 
-          avatar: '/static/images/match/avatar-default.png',
-          flag: '/static/images/match/flag-jp.png',
-          status: '在线',
-          isVip: true,
-          title: 'GM',
-          signature: '这个地方是个性签名...',
-          onlineStatus: 'Online Now',
-          registerDate: 'Nov 12, 2023'
-        },
-        { 
-          id: 3, 
-          name: 's4pOud', 
-          rating: '2720', 
-          avatar: '/static/images/match/avatar-default.png',
-          flag: '/static/images/match/flag-de.png',
-          status: '在线',
-          isVip: false,
-          signature: '这个地方是个性签名...',
-          onlineStatus: 'Online Now',
-          registerDate: 'Nov 12, 2023'
-        }
-      ],
-      allPlayersList: [
-        { 
-          id: 4, 
-          name: 'GigaQuparadze', 
-          rating: '2798', 
-          avatar: '/static/images/match/avatar-default.png',
-          flag: '/static/images/match/flag-gb.png',
-          status: '在线',
-          isVip: true,
-          title: 'GM',
-          signature: '这个地方是个性签名...',
-          onlineStatus: 'Online Now',
-          registerDate: 'Nov 12, 2023'
-        },
-        { 
-          id: 5, 
-          name: 'PerplexingPerfection', 
-          rating: '2794', 
-          avatar: '/static/images/match/avatar-default.png',
-          flag: '/static/images/match/flag-us.png',
-          status: '在线',
-          isVip: true,
-          title: 'GM',
-          signature: '这个地方是个性签名...',
-          onlineStatus: 'Online Now',
-          registerDate: 'Nov 12, 2023'
-        },
-        { 
-          id: 6, 
-          name: 'alexrustemov', 
-          rating: '2730', 
-          avatar: '/static/images/match/avatar-default.png',
-          flag: '/static/images/match/flag-ru.png',
-          status: '在线',
-          isVip: false,
-          signature: '这个地方是个性签名...',
-          onlineStatus: 'Online Now',
-          registerDate: 'Nov 12, 2023'
-        }
-      ]
+      friendsList: [], // 真实好友列表数据
+      allPlayersList: [], // 所有玩家列表数据
+      searchText: '', // 搜索关键词
+      isLoadingFriends: false, // 好友列表加载状态
+      isLoadingPlayers: false, // 所有玩家列表加载状态
+      searchTimer: null // 搜索防抖定时器
     }
   },
   methods: {
     // 切换子标签页
     switchSubTab(tab) {
       this.activeSubTab = tab;
+      // 切换到所有玩家时加载数据
+      if (tab === 'allPlayers' && this.allPlayersList.length === 0) {
+        this.loadAllPlayersList();
+      }
     },
     
     // 显示玩家详情
@@ -241,6 +183,188 @@ export default {
         title: '更多选项功能尚未开发',
         icon: 'none'
       });
+    },
+    
+    // 搜索输入事件
+    onSearchInput(e) {
+      this.searchText = e.detail.value;
+      // 防抖搜索
+      clearTimeout(this.searchTimer);
+      this.searchTimer = setTimeout(() => {
+        this.searchPlayers(this.searchText);
+      }, 500);
+    },
+    
+    // 搜索确认事件
+    onSearchConfirm(e) {
+      this.searchText = e.detail.value;
+      this.searchPlayers(this.searchText);
+    },
+    
+    // 加载好友列表
+    async loadFriendsList() {
+      if (this.isLoadingFriends) return;
+      
+      this.isLoadingFriends = true;
+      try {
+        const currentUser = uni.getStorageSync('userInfo');
+        if (!currentUser || !currentUser.id) {
+          console.warn('未找到当前用户信息');
+          return;
+        }
+        
+        const response = await listChessFriendPair({
+          userId: currentUser.id,
+          pageNo: 1,
+          pageSize: 100
+        });
+        
+        if (response && response.result && response.result.records) {
+          // 处理好友列表数据
+          this.friendsList = await Promise.all(
+            response.result.records.map(async (friend) => {
+              try {
+                // 获取好友详细信息
+                const friendInfo = await getUserData(friend.friendId || friend.userId);
+                return {
+                  id: friend.friendId || friend.userId,
+                  name: friendInfo.result?.realname || friendInfo.result?.username || '未知用户',
+                  rating: '1200', // 默认积分，可以后续从积分接口获取
+                  avatar: friendInfo.result?.avatar || '/static/images/match/avatar-default.png',
+                  flag: '/static/images/match/flag-cn.png', // 默认国旗
+                  status: '在线', // 默认状态
+                  isVip: false,
+                  signature: '这个地方是个性签名...',
+                  onlineStatus: 'Online Now',
+                  registerDate: friendInfo.result?.createTime || 'Unknown'
+                };
+              } catch (error) {
+                console.warn('获取好友信息失败:', error);
+                return {
+                  id: friend.friendId || friend.userId,
+                  name: '未知用户',
+                  rating: '1200',
+                  avatar: '/static/images/match/avatar-default.png',
+                  flag: '/static/images/match/flag-cn.png',
+                  status: '离线',
+                  isVip: false,
+                  signature: '这个地方是个性签名...',
+                  onlineStatus: 'Offline',
+                  registerDate: 'Unknown'
+                };
+              }
+            })
+          );
+        }
+      } catch (error) {
+        console.error('加载好友列表失败:', error);
+        uni.showToast({
+          title: '加载好友列表失败',
+          icon: 'none'
+        });
+      } finally {
+        this.isLoadingFriends = false;
+      }
+    },
+    
+    // 加载所有玩家列表
+    async loadAllPlayersList() {
+      if (this.isLoadingPlayers) return;
+      
+      this.isLoadingPlayers = true;
+      try {
+        const response = await getUserList({
+          pageNo: 1,
+          pageSize: 50
+        });
+        
+        if (response && response.result && response.result.records) {
+          this.allPlayersList = response.result.records.map(user => ({
+            id: user.id,
+            name: user.realname || user.username || '未知用户',
+            rating: '1200', // 默认积分，可以后续从积分接口获取
+            avatar: user.avatar || '/static/images/match/avatar-default.png',
+            flag: '/static/images/match/flag-cn.png', // 默认国旗
+            status: '在线', // 默认状态，可以后续从在线状态接口获取
+            isVip: false, // 默认非VIP，可以后续从VIP接口获取
+            title: '', // 默认无称号
+            signature: '这个地方是个性签名...',
+            onlineStatus: 'Online Now',
+            registerDate: user.createTime || 'Unknown'
+          }));
+        }
+      } catch (error) {
+        console.error('加载所有玩家列表失败:', error);
+        uni.showToast({
+          title: '加载玩家列表失败',
+          icon: 'none'
+        });
+      } finally {
+        this.isLoadingPlayers = false;
+      }
+    },
+    
+    // 搜索玩家
+    async searchPlayers(keyword) {
+      if (!keyword.trim()) {
+        // 如果搜索关键词为空，重新加载对应列表
+        if (this.activeSubTab === 'friends') {
+          this.loadFriendsList();
+        } else {
+          this.loadAllPlayersList();
+        }
+        return;
+      }
+      
+      try {
+        if (this.activeSubTab === 'friends') {
+          // 在好友列表中搜索
+          this.friendsList = this.friendsList.filter(friend => 
+            friend.name.toLowerCase().includes(keyword.toLowerCase())
+          );
+        } else {
+          // 在所有玩家中搜索
+          const response = await getUserList({
+            username: keyword,
+            pageNo: 1,
+            pageSize: 50
+          });
+          
+          if (response && response.result && response.result.records) {
+            this.allPlayersList = response.result.records.map(user => ({
+              id: user.id,
+              name: user.realname || user.username || '未知用户',
+              rating: '1200',
+              avatar: user.avatar || '/static/images/match/avatar-default.png',
+              flag: '/static/images/match/flag-cn.png',
+              status: '在线',
+              isVip: false,
+              title: '',
+              signature: '这个地方是个性签名...',
+              onlineStatus: 'Online Now',
+              registerDate: user.createTime || 'Unknown'
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('搜索玩家失败:', error);
+        uni.showToast({
+          title: '搜索失败',
+          icon: 'none'
+        });
+      }
+    }
+  },
+  
+  mounted() {
+    // 组件挂载后加载好友列表
+    this.loadFriendsList();
+  },
+  
+  beforeDestroy() {
+    // 清理搜索定时器
+    if (this.searchTimer) {
+      clearTimeout(this.searchTimer);
     }
   }
 }

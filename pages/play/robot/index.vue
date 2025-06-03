@@ -41,6 +41,7 @@
               :play-as="playerColor"
               :is-checkmated="isCheckmated"
               :checkmate-color="checkmateColor"
+              :interactive="true"
               @cell-click="handleCellClick"
             />
           </view>
@@ -2499,4 +2500,4 @@ export default {
   // flex: 1; // 移除或调整flex，以允许评估组件占据空间
 }
 
-</style> 
+</style>

@@ -64,35 +64,18 @@
 </template>
 
 <script>
+import { getFriendList, searchFriends } from '@/api/friend'
+import { getUserData } from '@/api/system/user'
+
 export default {
   name: 'FriendsTab',
   data() {
     return {
       searchQuery: '',
-      // 示例数据，实际应用中应该通过API获取
-      searchResults: [
-        {
-          id: 1,
-          userName: 'ChessPlayer522009',
-          rating: 2534,
-          avatar: '/static/images/match/avatar-default.png',
-          badge: '/static/images/match/badge-red.png'
-        },
-        {
-          id: 2,
-          userName: 'riishadawda',
-          rating: 827,
-          avatar: '/static/images/match/avatar-default.png',
-          badge: ''
-        },
-        {
-          id: 3,
-          userName: 'DawDawMLG',
-          rating: 679,
-          avatar:'/static/images/match/avatar-default.png',
-          badge: ''
-        }
-      ]
+      searchResults: [], // 搜索结果列表
+      friendsList: [], // 好友列表
+      isSearching: false, // 是否正在搜索
+      currentUser: null // 当前用户信息
     }
   },
   methods: {
@@ -102,10 +85,39 @@ export default {
     },
     
     // 搜索用户
-    onSearch() {
-      // 实际应用中应通过API搜索用户
-      console.log('搜索用户:', this.searchQuery);
-      // 这里应该调用后端API进行搜索
+    async onSearch() {
+      if (!this.searchQuery.trim()) {
+        this.searchResults = [...this.friendsList];
+        return;
+      }
+      
+      this.isSearching = true;
+      try {
+        const response = await searchFriends({
+          depart_ids: this.currentUser?.departIds || [],
+          username: this.searchQuery,
+          pageNo: 1,
+          pageSize: 20
+        });
+        
+        if (response && response.result && response.result.records) {
+          this.searchResults = response.result.records.map(user => ({
+            id: user.id,
+            userName: user.username || user.realname,
+            rating: user.rating || 1200,
+            avatar: user.avatar || '/static/images/match/avatar-default.png',
+            badge: user.isVip ? '/static/images/match/badge-red.png' : ''
+          }));
+        }
+      } catch (error) {
+        console.error('搜索用户失败:', error);
+        uni.showToast({
+          title: '搜索失败',
+          icon: 'none'
+        });
+      } finally {
+        this.isSearching = false;
+      }
     },
     
     // 邀请好友
@@ -116,27 +128,90 @@ export default {
     
     // 分享邀请链接
     shareInviteLink() {
-      // 生成并分享邀请链接
       console.log('分享邀请链接');
       this.$emit('share-invite-link');
-      
-      // 在实际应用中，可以调用系统分享功能
-      // uni.share({
-      //   provider: 'weixin',
-      //   scene: 'WXSceneSession',
-      //   type: 0,
-      //   title: '邀请你下棋',
-      //   summary: '和我一起下棋吧！',
-      //   imageUrl: '/static/images/match/chess-logo.png',
-      //   href: 'https://yourapp.com/invite?code=12345',
-      //   success: function (res) {
-      //     console.log('分享成功');
-      //   },
-      //   fail: function (err) {
-      //     console.log('分享失败', err);
-      //   }
-      // });
+    },
+    
+    // 加载好友列表
+    async loadFriendsList() {
+      try {
+        console.log('开始加载好友列表...');
+        
+        // 首先尝试从store获取用户信息
+        const userInfo = this.$store.state.user;
+        console.log('Store用户信息:', userInfo);
+        
+        // 如果store中没有用户信息，尝试获取用户信息
+        if (!userInfo.token) {
+          console.warn('用户未登录，无法获取好友列表');
+          uni.showToast({
+            title: '请先登录',
+            icon: 'none'
+          });
+          return;
+        }
+        
+        // 如果store中没有详细用户信息，先获取用户信息
+        if (!userInfo.name) {
+          console.log('获取用户详细信息...');
+          await this.$store.dispatch('GetInfo');
+        }
+        
+        // 构建请求参数 - 如果用户部门ID为空，默认使用[1]
+         let departIds = [];
+         
+         // 尝试从多个可能的字段获取部门ID
+         if (userInfo.departIds && userInfo.departIds.length > 0) {
+           departIds = userInfo.departIds;
+         } else if (userInfo.depart_ids && userInfo.depart_ids.length > 0) {
+           departIds = userInfo.depart_ids;
+         } else {
+           // 如果部门ID为空，默认设置为[1]
+           departIds = [1];
+         }
+         
+         const requestParams = {
+           depart_ids: departIds,
+           pageNo: 1,
+           pageSize: 50
+         };
+        console.log('请求参数:', requestParams);
+        
+        const response = await getFriendList(requestParams);
+        console.log('API响应:', response);
+        
+        // 根据实际API响应结构处理数据
+        // API返回格式: {success: true, result: [{id: "xxx", userName: "xxx"}, ...]}
+        if (response && response.result && Array.isArray(response.result)) {
+          this.friendsList = response.result.map(user => ({
+            id: user.id,
+            userName: user.userName || user.username || user.realname,
+            rating: user.score || user.rating || 1200,
+            avatar: user.avatar || '/static/images/match/avatar-default.png',
+            badge: user.isVip ? '/static/images/match/badge-red.png' : ''
+          }));
+          
+          console.log('处理后的好友列表:', this.friendsList);
+          
+          // 初始化搜索结果为好友列表
+          this.searchResults = [...this.friendsList];
+        } else {
+          console.log('响应数据格式不正确或无数据:', response);
+          this.friendsList = [];
+          this.searchResults = [];
+        }
+      } catch (error) {
+        console.error('加载好友列表失败:', error);
+        uni.showToast({
+          title: '加载好友列表失败',
+          icon: 'none'
+        });
+      }
     }
+  },
+  
+  mounted() {
+    this.loadFriendsList();
   }
 }
 </script>
@@ -276,4 +351,4 @@ export default {
     }
   }
 }
-</style> 
+</style>

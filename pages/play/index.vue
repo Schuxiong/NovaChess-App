@@ -147,6 +147,8 @@
 import TopSpacing from '@/components/TopSpacing.vue'
 import UniPopup from '@/components/uni-popup/uni-popup.vue'
 import { initGame, moveChess, getChessMovesHistory, updateGameStatus, enterGame, getHistoryGamesList } from '@/api/game';
+import { getPlayerScoreList } from '@/api/score';
+import { getUserData } from '@/api/system/user';
 
 export default {
   components: {
@@ -246,7 +248,8 @@ export default {
           this.$refs.historyPopup.open();
           break;
         case 'rank':
-          // 打开排行榜弹窗
+          // 加载排行榜数据并打开弹窗
+          await this.loadRankingData();
           this.$refs.rankPopup.open();
           break;
       }
@@ -261,15 +264,17 @@ export default {
         });
         
         if (response.success && response.result && response.result.records) {
-          // 将后端数据格式化为前端需要的格式
+          // 将后端数据格式化为前端需要的格式，使用正确的积分字段
           this.historyGames = response.result.records.map(game => ({
             id: game.id,
-            player1: game.whitePlayerName || '白方玩家',
-            rating1: game.whitePlayerRating || '0',
-            player2: game.blackPlayerName || '黑方玩家', 
-            rating2: game.blackPlayerRating || '0',
-            score: this.formatGameResult(game.gameResult),
-            duration: this.formatGameDuration(game.gameDuration)
+            player1: game.whitePlayAccount || '白方玩家',
+            rating1: game.whitePlayerScore || '0', // 使用正确的积分字段
+            player2: game.blackPlayAccount || '黑方玩家', 
+            rating2: game.blackPlayerScore || '0', // 使用正确的积分字段
+            score: this.formatGameResult(game.gameState),
+            duration: this.formatGameDuration(game.createTime, game.updateTime),
+            gameState: game.gameState,
+            createTime: game.createTime
           }));
         }
       } catch (error) {
@@ -280,19 +285,36 @@ export default {
       }
     },
     // 格式化游戏结果
-    formatGameResult(result) {
-      switch (result) {
-        case 'WHITE_WIN': return '1-0';
-        case 'BLACK_WIN': return '0-1';
-        case 'DRAW': return '½-½';
-        default: return '进行中';
+    formatGameResult(gameState) {
+      switch (gameState) {
+        case 1: return '进行中';
+        case 2: return '1-0'; // 白胜
+        case 3: return '0-1'; // 黑胜
+        case 4: return '½-½'; // 和棋
+        case 0: return '未开始';
+        default: return '未知';
       }
     },
     // 格式化游戏时长
-    formatGameDuration(duration) {
-      if (!duration) return '未知';
-      const minutes = Math.floor(duration / 60);
-      return `${minutes} min`;
+    formatGameDuration(createTime, updateTime) {
+      if (!createTime) return '未知';
+      
+      const startTime = new Date(createTime.replace(/-/g, '/'));
+      const endTime = updateTime ? new Date(updateTime.replace(/-/g, '/')) : new Date();
+      
+      if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+        return '未知';
+      }
+      
+      const diffMs = endTime.getTime() - startTime.getTime();
+      const minutes = Math.floor(diffMs / (1000 * 60));
+      
+      if (minutes < 1) return '< 1 min';
+      if (minutes < 60) return `${minutes} min`;
+      
+      const hours = Math.floor(minutes / 60);
+      const remainingMinutes = minutes % 60;
+      return `${hours}h ${remainingMinutes}m`;
     },
     // 跳转到回放页面
     gotoReplay(gameId) {
@@ -302,6 +324,98 @@ export default {
       // 关闭弹窗
       this.$refs.historyPopup.close();
     },
+    // 加载排行榜数据
+    async loadRankingData() {
+      try {
+        uni.showLoading({ title: '加载排行榜...' });
+        
+        // 获取排行榜数据（前10名）
+        const response = await getPlayerScoreList({
+          pageNo: 1,
+          pageSize: 10,
+          column: 'score',
+          order: 'desc' // 按积分降序排列
+        });
+        
+        if (response.success && response.result && response.result.records) {
+          // 格式化排行榜数据
+          this.rankingList = response.result.records.map((player, index) => ({
+            rank: index + 1,
+            name: player.userAccount || `玩家${player.userId}`,
+            rating: player.score || 600,
+            country: 'cn', // 默认国家
+            avatar: 'https://pic1.imgdb.cn/item/67f3c5c7e381c3632bee8ff9.png' // 默认头像
+          }));
+          
+          // 获取当前用户排名
+          await this.getCurrentUserRanking();
+        }
+        
+      } catch (error) {
+        console.error('获取排行榜失败:', error);
+        uni.showToast({ title: '获取排行榜失败', icon: 'none' });
+      } finally {
+        uni.hideLoading();
+      }
+    },
+    
+    // 获取当前用户排名
+    async getCurrentUserRanking() {
+      try {
+        // 获取当前用户信息
+        const userResponse = await getUserData();
+        
+        if (userResponse.success && userResponse.result) {
+          const currentUserId = userResponse.result.id;
+          
+          // 获取当前用户的积分信息
+          const scoreResponse = await getPlayerScoreList({
+            userId: currentUserId,
+            pageNo: 1,
+            pageSize: 1
+          });
+          
+          if (scoreResponse.success && scoreResponse.result && scoreResponse.result.records.length > 0) {
+            const userScore = scoreResponse.result.records[0];
+            
+            // 计算用户排名（获取积分高于当前用户的人数+1）
+            const rankResponse = await getPlayerScoreList({
+              pageNo: 1,
+              pageSize: 1000, // 获取足够多的数据来计算排名
+              column: 'score',
+              order: 'desc'
+            });
+            
+            let userRank = 1;
+            if (rankResponse.success && rankResponse.result && rankResponse.result.records) {
+              const allPlayers = rankResponse.result.records;
+              userRank = allPlayers.findIndex(player => player.userId === currentUserId) + 1;
+              if (userRank === 0) userRank = allPlayers.length + 1; // 如果没找到，排在最后
+            }
+            
+            this.userRanking = {
+              rank: userRank,
+              name: userScore.userAccount || '我的用户名',
+              rating: userScore.score || 600,
+              country: 'cn',
+              avatar: 'https://pic1.imgdb.cn/item/67f3c5c7e381c3632bee8ff9.png'
+            };
+          }
+        }
+        
+      } catch (error) {
+        console.error('获取用户排名失败:', error);
+        // 使用默认值
+        this.userRanking = {
+          rank: 999,
+          name: '我的用户名',
+          rating: 600,
+          country: 'cn',
+          avatar: 'https://pic1.imgdb.cn/item/67f3c5c7e381c3632bee8ff9.png'
+        };
+      }
+    },
+    
     // 关闭弹窗
     closePopup(type) {
       if (type === 'history') {

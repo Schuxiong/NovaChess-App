@@ -119,6 +119,20 @@
       }
     },
     {
+      "path": "pages/work/learn/custom",
+      "style": {
+        "navigationBarTitleText": "自定义课程",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/work/learn/course-detail",
+      "style": {
+        "navigationBarTitleText": "课程详情",
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/work/tactics/index",
       "style": {
         "navigationBarTitleText": "战术训练",

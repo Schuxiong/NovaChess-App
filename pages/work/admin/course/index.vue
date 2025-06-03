@@ -153,6 +153,7 @@
 <script>
 import TopSpacing from '@/components/TopSpacing.vue'
 import { checkRole } from '@/utils/permission'
+import { getCourseList, deleteCourse as deleteCourseAPI } from '@/api/course'
 
 export default {
   components: {
@@ -167,6 +168,7 @@ export default {
       courseToDelete: null,
       deleteIndex: -1,
       refreshing: false,
+      loading: false,
       courseList: [
         {
           id: 'king-moves',
@@ -182,22 +184,22 @@ export default {
               boardSetup: {
                 clear: true,
                 pieces: [
-                  { piece: 'white-king', position: { row: 4, col: 4 } }
-                ]
-              }
-            },
-            {
-              type: 'task',
-              message: '国王可以沿任何方向移动一格。请将国王从e4移动到f4（向右一格）。',
-              expectedMove: {
-                from: { row: 4, col: 4 },
-                to: { row: 4, col: 5 }
+                    { piece: 'white-king', position: { row: 4, col: 4 } }
+                  ]
+                }
               },
-              correctMessage: 'Kf4 是正确的！国王可以向任何方向移动一格。',
-              errorMessage: '不正确，国王只能移动一格。请尝试将国王从e4移动到f4（向右）。',
-              hintMessage: '点击国王，然后点击右侧的f4格子。'
-            }
-          ]
+              {
+                type: 'task',
+                message: '国王可以沿任何方向移动一格。请将国王从e4移动到f4（向右一格）。',
+                expectedMove: {
+                  from: { row: 4, col: 4 },
+                  to: { row: 4, col: 5 }
+                },
+                correctMessage: 'Kf4 是正确的！国王可以向任何方向移动一格。',
+                errorMessage: '不正确，国王只能移动一格。请尝试将国王从e4移动到f4（向右）。',
+                hintMessage: '点击国王，然后点击右侧的f4格子。'
+              }
+            ]
         },
         {
           id: 'queen-moves',
@@ -213,11 +215,11 @@ export default {
               boardSetup: {
                 clear: true,
                 pieces: [
-                  { piece: 'white-queen', position: { row: 4, col: 4 } }
-                ]
+                    { piece: 'white-queen', position: { row: 4, col: 4 } }
+                  ]
+                }
               }
-            }
-          ]
+            ]
         },
         {
           id: 'pin-tactic',
@@ -235,11 +237,11 @@ export default {
                 pieces: [
                   { piece: 'white-bishop', position: { row: 0, col: 2 } },
                   { piece: 'black-knight', position: { row: 3, col: 5 } },
-                  { piece: 'black-king', position: { row: 7, col: 7 } }
-                ]
+                    { piece: 'black-king', position: { row: 7, col: 7 } }
+                  ]
+                }
               }
-            }
-          ]
+            ]
         },
         {
           id: 'opening-strategy',
@@ -255,10 +257,16 @@ export default {
               boardSetup: {
                 clear: false
               }
-            }
-          ]
-        }
-      ]
+              }
+            ]
+          }
+        ],
+      // 添加分页相关数据
+      pagination: {
+        pageNo: 1,
+        pageSize: 20,
+        total: 0
+      }
     }
   },
   computed: {
@@ -310,10 +318,59 @@ export default {
     },
     
     // 加载课程数据
-    loadCourseData() {
-      // 这里可以添加从服务器加载课程数据的逻辑
-      // 目前使用模拟数据
-      console.log('加载课程数据')
+    async loadCourseData() {
+      try {
+        this.loading = true
+        const response = await getCourseList()
+        if (response.code === 200 && response.success) {
+          // 处理API返回的数据结构
+          const courseData = response.result?.records || []
+          
+          // 转换数据格式以匹配前端期望的结构
+          this.courseList = courseData.map(course => ({
+            id: course.id,
+            title: course.title,
+            description: course.description,
+            icon: course.iconUrl || this.getDefaultIcon(course.category),
+            category: course.category,
+            isBuiltIn: false, // API返回的课程默认不是内置课程
+            steps: course.steps || [], // 如果没有步骤数据，设为空数组
+            createdAt: course.createdAt,
+            updatedAt: course.updatedAt
+          }))
+          
+          // 更新分页信息
+          if (response.result) {
+            this.pagination.total = response.result.total || 0
+            this.pagination.pageNo = response.result.current || 1
+            this.pagination.pageSize = response.result.size || 10
+          }
+        } else {
+          uni.showToast({
+            title: response.message || '获取课程列表失败',
+            icon: 'none'
+          })
+        }
+      } catch (error) {
+        console.error('加载课程数据失败:', error)
+        uni.showToast({
+          title: '网络错误，请稍后重试',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+        this.refreshing = false
+      }
+    },
+    
+    // 获取默认图标
+    getDefaultIcon(category) {
+      const defaultIcons = {
+        'basic': 'https://pic1.imgdb.cn/item/67f3d477e381c3632bee96e5.png',
+        'advanced': 'https://pic1.imgdb.cn/item/67f3d491e381c3632bee96f9.png',
+        'strategy': 'https://pic1.imgdb.cn/item/67f3d490e381c3632bee96f8.png'
+      }
+      return defaultIcons[category] || 'https://pic1.imgdb.cn/item/67f3d0a2e381c3632bee955e.png'
     },
     
     // 根据分类筛选课程
@@ -379,7 +436,7 @@ export default {
     },
     
     // 删除课程
-    deleteCourse() {
+    async deleteCourse() {
       if (this.deleteIndex > -1) {
         // 内置课程不能删除
         if (this.courseToDelete.isBuiltIn) {
@@ -387,20 +444,36 @@ export default {
             title: '内置课程不能删除',
             icon: 'none'
           })
+          this.cancelDelete()
           return
         }
-        // 实际场景中应该调用API删除课程
-        this.courseList.splice(this.deleteIndex, 1)
         
-        uni.showToast({
-          title: '课程已删除',
-          icon: 'success'
-        })
+        try {
+          const response = await deleteCourseAPI(this.courseToDelete.id)
+          if (response.code === 200) {
+            // 从本地列表中移除
+            this.courseList.splice(this.deleteIndex, 1)
+            
+            uni.showToast({
+              title: '课程已删除',
+              icon: 'success'
+            })
+          } else {
+            uni.showToast({
+              title: response.message || '删除失败',
+              icon: 'none'
+            })
+          }
+        } catch (error) {
+          console.error('删除课程失败:', error)
+          uni.showToast({
+            title: '网络错误，请稍后重试',
+            icon: 'none'
+          })
+        }
         
         // 关闭确认弹窗
-        this.showDeleteModal = false
-        this.courseToDelete = null
-        this.deleteIndex = -1
+        this.cancelDelete()
       }
     },
     
@@ -410,8 +483,7 @@ export default {
     },
     
     onRefresh(e) {
-      this.pagination.pageNo = 1;
-      this.fetchCourseList();
+      this.loadCourseData()
     },
     
     onRestore(e) {

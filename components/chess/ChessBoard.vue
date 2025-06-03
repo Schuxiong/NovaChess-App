@@ -17,7 +17,9 @@
             'castling-indicator': isCastlingPosition(getBoardRow(rowIndex), getBoardCol(colIndex)),
             'en-passant-target': isEnPassantPosition(getBoardRow(rowIndex), getBoardCol(colIndex)) === 'target',
             'en-passant-captured': isEnPassantPosition(getBoardRow(rowIndex), getBoardCol(colIndex)) === 'captured',
-            'checkmate-highlight': isCheckmated && isKingPosition(getBoardRow(rowIndex), getBoardCol(colIndex))
+            'checkmate-highlight': isCheckmated && isKingPosition(getBoardRow(rowIndex), getBoardCol(colIndex)),
+            'config-mode': configMode,
+            'drop-target': dragOverCell && dragOverCell.row === getBoardRow(rowIndex) && dragOverCell.col === getBoardCol(colIndex)
           }"
           @click="handleCellClick(getBoardRow(rowIndex), getBoardCol(colIndex))"
         >
@@ -34,8 +36,12 @@
             mode="aspectFit"
             :class="{ 
               'animate-piece': animatingPiece && animatingPiece.row === getBoardRow(rowIndex) && animatingPiece.col === getBoardCol(colIndex),
-              'checkmate-piece': isCheckmated && isKingPosition(getBoardRow(rowIndex), getBoardCol(colIndex))
+              'checkmate-piece': isCheckmated && isKingPosition(getBoardRow(rowIndex), getBoardCol(colIndex)),
+              'draggable-piece': configMode
             }"
+            @touchstart="handleTouchStart($event, getBoardRow(rowIndex), getBoardCol(colIndex))"
+            @touchmove="handleTouchMove($event)"
+            @touchend="handleTouchEnd($event)"
           ></image>
         </view>
       </view>
@@ -105,6 +111,14 @@ export default {
     checkmateColor: {
       type: String,
       default: ''
+    },
+    interactive: {
+      type: Boolean,
+      default: false
+    },
+    configMode: {
+      type: Boolean,
+      default: false
     }
   },
   data() {
@@ -128,7 +142,11 @@ export default {
         checkmate: null
       },
       showCheckmateAnimation: false, // 是否显示将军/将杀动画
-      checkmateText: ''            // 将军/将杀文本
+      checkmateText: '',           // 将军/将杀文本
+      draggedPiece: null,          // 正在拖拽的棋子信息
+      dragOverCell: null,          // 拖拽悬停的格子
+      dragStartPosition: null,     // 拖拽开始的位置
+      isDragging: false            // 是否正在拖拽
     }
   },
   created() {
@@ -183,7 +201,81 @@ export default {
     },
     
     handleCellClick(row, col) {
-      this.$emit('cell-click', { row, col });
+      if (this.interactive || this.configMode) {
+        this.$emit('cell-click', { row, col });
+      }
+    },
+    
+    // 触摸开始（替代拖拽开始）
+    handleTouchStart(event, row, col) {
+      if (!this.configMode) return;
+      
+      const piece = this.boardState[row][col];
+      if (!piece) return;
+      
+      event.preventDefault();
+      
+      this.draggedPiece = piece;
+      this.dragStartPosition = { row, col };
+      this.isDragging = true;
+      
+      console.log(`开始拖拽棋子: ${piece} 从位置 (${row},${col})`);
+    },
+    
+    // 触摸移动（替代拖拽悬停）
+    handleTouchMove(event) {
+      if (!this.configMode || !this.isDragging) return;
+      
+      event.preventDefault();
+      
+      // 获取触摸位置
+      const touch = event.touches[0];
+      if (!touch) return;
+      
+      // 这里可以添加视觉反馈，比如显示拖拽的棋子跟随手指
+      console.log('拖拽中...');
+    },
+    
+    // 触摸结束（替代拖拽放下）
+    handleTouchEnd(event) {
+      if (!this.configMode || !this.isDragging) return;
+      
+      event.preventDefault();
+      
+      // 获取触摸结束位置
+      const touch = event.changedTouches[0];
+      if (!touch) {
+        this.resetDragState();
+        return;
+      }
+      
+      // 通过坐标计算目标格子
+      const targetElement = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (!targetElement) {
+        this.resetDragState();
+        return;
+      }
+      
+      // 查找最近的棋盘格子
+      const cellElement = targetElement.closest('.board-cell');
+      if (!cellElement) {
+        this.resetDragState();
+        return;
+      }
+      
+      // 获取目标位置（这里需要根据实际DOM结构来计算）
+      // 简化处理：直接通过点击事件来处理放置
+      console.log('拖拽结束，请点击目标位置完成移动');
+      
+      this.resetDragState();
+    },
+    
+    // 重置拖拽状态
+    resetDragState() {
+      this.draggedPiece = null;
+      this.dragStartPosition = null;
+      this.dragOverCell = null;
+      this.isDragging = false;
     },
     
     isValidMovePosition(row, col) {
@@ -600,6 +692,45 @@ export default {
           // 将杀棋子动画
           &.checkmate-piece {
             animation: checkmate-piece-animation 1s infinite alternate;
+          }
+          
+          // 可拖拽棋子样式
+          &.draggable-piece {
+            cursor: grab;
+            
+            &:active {
+              cursor: grabbing;
+              opacity: 0.7;
+            }
+          }
+        }
+        
+        // 配置模式样式
+        &.config-mode {
+          cursor: pointer;
+          
+          &:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+          }
+        }
+        
+        // 拖拽目标样式
+        &.drop-target {
+          background-color: rgba(76, 175, 80, 0.3) !important;
+          border: 2rpx dashed #4CAF50;
+          
+          &::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60%;
+            height: 60%;
+            border: 2rpx solid #4CAF50;
+            border-radius: 50%;
+            background-color: rgba(76, 175, 80, 0.2);
+            z-index: 1;
           }
         }
       }

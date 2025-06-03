@@ -27,6 +27,7 @@
               :play-as="playAs"
               :is-checkmated="isCheckmated"
               :checkmate-color="checkmateColor"
+              :interactive="true"
               @cell-click="handleCellClick"
               @promotion-move="handlePromotion"
               :key="JSON.stringify(chessboard)"
@@ -258,9 +259,9 @@
   // 导入游戏相关API
   import { initGame, moveChess, getChessMovesHistory, updateGameStatus, enterGame } from '@/api/game';
   // 导入用户API
-  import { getUserData } from '@/api/system/user';
+  import { getUserData, getUserList } from '@/api/system/user';
   // 导入积分相关API
-  import { updatePlayerScore, addPlayerScoreRecord } from '@/api/score';
+  import { updatePlayerScore, addPlayerScoreRecord, getPlayerScoreList } from '@/api/score';
   
   // 导入WebSocket服务
   import { connectWebSocket, subscribeToTopic, sendMessage, disconnectWebSocket, unsubscribeFromTopic } from '@/utils/websocket.js';
@@ -445,8 +446,8 @@
       // 监听兵升变事件
       this.$on('promotion-move', this.handlePromotion);
       
-      // 模拟监听好友邀请
-      this.simulateInvitationListener();
+      // 初始化邀请监听器
+      // this.simulateInvitationListener(); // 已移除模拟方法
       
       // 监控棋盘数据变化
       this.$watch('chessboard', (newBoard, oldBoard) => {
@@ -1185,14 +1186,14 @@
       
       // 与好友一起玩
       playWithFriend() {
-        console.log('显示好友对战界面');
+        // 显示好友对战界面
         // 已通过NewGameTab内的showFriendsTab控制显示界面
         // 不需要做额外操作
       },
       
       // 处理邀请好友
       inviteFriend(user, inviteInfo) {
-        console.log('邀请好友：', user, inviteInfo);
+        // 邀请好友
         
         // 更新对手信息
         this.opponentName = user.name || user.userName || user.username;
@@ -1237,11 +1238,11 @@
             if (res.result && typeof res.result === 'object' && res.result.id) {
               // 如果result是对象且包含id属性
               inviteId = res.result.id;
-              console.log('从result对象中获取inviteId:', inviteId);
+              // 从result对象中获取inviteId
             } else if (typeof res.result === 'string' && res.result.match(/^[0-9]+$/)) {
               // 如果result是纯数字字符串
               inviteId = res.result;
-              console.log('从result字符串中获取inviteId:', inviteId);
+              // 从result字符串中获取inviteId
             } else {
               // 无法获取有效ID，尝试查询最新邀请
               console.error('无法从响应中获取有效的邀请ID:', res.result);
@@ -1254,7 +1255,7 @@
             }
             
             this.pendingInviteId = inviteId;
-            console.log('当前邀请ID已设置为:', this.pendingInviteId);
+            // 当前邀请ID已设置
             
             // 保存当前执棋颜色设置，供后续使用
             this.playAs = inviteInfo.playAs;
@@ -1844,45 +1845,69 @@
             this.showLeaderboardResult(result);
           }, 1500);
         } else {
-          // 非天梯赛模式，直接显示普通结果弹窗
-          setTimeout(() => {
+          // 非天梯赛模式，调用积分接口但不变更积分
+          setTimeout(async () => {
+            try {
+              // 调用积分接口，积分变化为0
+              await this.updatePlayerScoreInGame(0, result);
+            } catch (error) {
+              console.warn('普通对战积分记录失败:', error);
+            }
+            // 显示普通结果弹窗
             this.showResultPopup(result);
           }, 1000);
         }
       },
       
       // 显示天梯赛结果
-      showLeaderboardResult(result) {
-        // 计算积分变化
-        let pointsChange = 0;
-        
-        if (result === 'victory') {
-          // 胜利获得积分，基础15分加上根据对手积分的额外加成
-          const basePoints = 15;
-          const difficultyBonus = Math.max(0, Math.floor((this.opponentRating - 335) / 100));
-          pointsChange = basePoints + difficultyBonus;
-        } else if (result === 'defeat') {
-          // 失败扣除积分，基础10分减去根据对手积分的减免
-          const basePoints = -10;
-          const difficultyBonus = Math.min(5, Math.max(0, Math.floor((this.opponentRating - 335) / 150)));
-          pointsChange = basePoints + difficultyBonus;
-        } else {
-          // 和棋，积分变化较小
-          pointsChange = Math.floor(Math.random() * 5) - 2; // -2到2之间的随机数
+      async showLeaderboardResult(result) {
+        try {
+          // 计算积分变化
+          let pointsChange = 0;
+          
+          if (result === 'victory') {
+            // 胜利获得积分，基础15分加上根据对手积分的额外加成
+            const basePoints = 15;
+            const difficultyBonus = Math.max(0, Math.floor((this.opponentRating - this.playerRating) / 100));
+            pointsChange = basePoints + difficultyBonus;
+          } else if (result === 'defeat') {
+            // 失败扣除积分，基础10分减去根据对手积分的减免
+            const basePoints = -10;
+            const difficultyBonus = Math.min(5, Math.max(0, Math.floor((this.opponentRating - this.playerRating) / 150)));
+            pointsChange = basePoints + difficultyBonus;
+          } else {
+            // 和棋，积分变化根据双方积分差计算
+            const ratingDiff = this.opponentRating - this.playerRating;
+            if (ratingDiff > 100) {
+              // 如果对手积分明显高，和棋算小胜，加少量分
+              pointsChange = 5;
+            } else if (ratingDiff < -100) {
+              // 如果对手积分明显低，和棋算小负，减少量分
+              pointsChange = -3;
+            } else {
+              // 实力相当，和棋不变分或微调
+              pointsChange = Math.floor(Math.random() * 3) - 1; // -1到1之间的随机数
+            }
+          }
+          
+          // 设置积分变化数据
+          this.ratingChange = {
+            before: this.playerRating,
+            after: this.playerRating + pointsChange,
+            change: pointsChange
+          };
+          
+          // 调用积分结算接口
+          await this.updatePlayerScoreInGame(pointsChange, result);
+          
+          // 显示普通结果弹窗，结果弹窗中已包含积分显示
+          this.showResultPopup(result);
+          
+        } catch (error) {
+          console.error('积分结算失败:', error);
+          // 即使积分结算失败，也要显示游戏结果
+          this.showResultPopup(result);
         }
-        
-        // 更新积分（实际应用中应该发送到服务器保存）
-        this.playerRating = 335 + pointsChange;
-        
-        // 设置积分变化数据
-        this.ratingChange = {
-          before: 335,
-          after: this.playerRating,
-          change: pointsChange
-        };
-        
-        // 显示普通结果弹窗，结果弹窗中已包含积分显示
-        this.showResultPopup(result);
       },
       
       // 提出和棋
@@ -1951,146 +1976,180 @@
       },
       
       // 参加天梯赛
-      playLeaderboard() {
-        console.log('进入天梯赛匹配');
+      async playLeaderboard() {
+        // 进入天梯赛匹配
         
-        // 设置为天梯赛模式
-        this.isLeaderboardMode = true;
-        
-        // 直接进入匹配状态
-        this.gameStarted = true;
-        this.matching = true;
-        
-        // 使用默认配置：10分钟、标准模式、随机执子
-        this.timeControl = '10 min';
-        this.gameMode = 'standard';
-        this.playAs = 'random';
-        
-        // 重置棋盘到初始状态
-        this.resetBoard();
-        
-        // 匹配开始时，显示等待对手加入
-        this.opponentName = '等待对手加入';
-        
-        // 模拟匹配过程
-        setTimeout(() => {
-          // 模拟匹配成功
-          this.findLeaderboardOpponent();
-        }, 3000);
+        try {
+          // 设置为天梯赛模式
+          this.isLeaderboardMode = true;
+          
+          // 显示匹配状态
+          this.matching = true;
+          this.opponentName = '正在匹配对手...';
+          
+          // 使用默认配置：10分钟、标准模式、随机执子
+          this.timeControl = '10 min';
+          this.gameMode = 'standard';
+          this.playAs = 'random';
+          
+          // 重置棋盘到初始状态
+          this.resetBoard();
+          
+          // 获取当前用户的积分信息
+          await this.getCurrentPlayerScore();
+          
+          // 获取在线玩家列表并进行匹配
+          await this.findLeaderboardOpponent();
+          
+        } catch (error) {
+          console.error('天梯赛匹配失败:', error);
+          uni.showToast({
+            title: '匹配失败，请重试',
+            icon: 'none'
+          });
+          this.matching = false;
+          this.isLeaderboardMode = false;
+        }
+      },
+      
+      // 获取当前玩家积分
+      async getCurrentPlayerScore() {
+        try {
+          const response = await getPlayerScoreList({
+            userId: this.currentUserId,
+            pageNo: 1,
+            pageSize: 1
+          });
+          
+          if (response.success && response.result && response.result.records.length > 0) {
+            this.playerRating = response.result.records[0].score || 600;
+          } else {
+            // 如果没有积分记录，使用默认初始积分600
+            this.playerRating = 600;
+          }
+        } catch (error) {
+          console.error('获取玩家积分失败:', error);
+          this.playerRating = 600; // 使用默认积分
+        }
       },
       
       // 匹配天梯赛对手
-      findLeaderboardOpponent() {
-        // 模拟从后端获取对手信息
-        const opponentList = [
-          { name: 'GrandMaster2000', rating: 2356 },
-          { name: 'ChessWizard', rating: 1987 },
-          { name: 'KnightRider', rating: 1876 },
-          { name: 'QueenDomination', rating: 2145 },
-          { name: 'BishopAttack', rating: 1756 }
-        ];
-        
-        // 随机选择一个对手
-        const randomOpponent = opponentList[Math.floor(Math.random() * opponentList.length)];
-        
-        // 设置匹配状态和对手信息
-        this.matching = false;
-        this.opponentName = randomOpponent.name;
-        this.opponentRating = randomOpponent.rating;
-        
-        // 随机分配执棋方
-        this.playAs = Math.random() < 0.5 ? 'white' : 'black';
-        
-        // 切换到对战标签
-        this.activeTab = 'match';
-        
-        // 按规则白方先行，开始白方计时
-        this.startWhiteTimer();
-        
-        uni.showToast({
-          title: `天梯赛开始，您执${this.playAs === 'white' ? '白' : '黑'}子`,
-          icon: 'none'
-        });
-      },
-      
-      // 测试邀请弹窗 (仅用于开发测试)
-      testInvitation(userName = '') {
-        const testInviter = {
-          id: Math.floor(Math.random() * 1000) + 1,
-          name: userName || `Player${Math.floor(Math.random() * 1000)}`,
-          rating: Math.floor(Math.random() * 1500) + 1000,
-          avatar: '/static/images/match/avatar-default.png',
-          timeControl: ['5 min', '10 min', '15 min'][Math.floor(Math.random() * 3)],
-          inviteId: 'test-invite-' + Math.random().toString(36).substring(2, 10),
-          playAs: Math.random() < 0.5 ? 'white' : 'black'
-        };
-        
-        this.showInvitation(testInviter);
-      },
-      
-      // 模拟监听好友邀请
-      simulateInvitationListener() {
-        // 这里在实际应用中应该使用WebSocket等实时通讯技术
-        // 用于接收服务器推送的好友邀请
-        
-        // 模拟接收URL参数中的邀请
-        const query = uni.getStorageSync('pending_invitation');
-        if (query) {
-          uni.removeStorageSync('pending_invitation');
+      async findLeaderboardOpponent() {
+        try {
+          let availableOpponents = [];
           
-          // 解析邀请信息并显示弹窗
+          // 首先尝试从在线用户列表获取对手
           try {
-            const inviter = JSON.parse(query);
-            setTimeout(() => {
-              this.showInvitation(inviter);
-              }, 1000);
-          } catch (e) {
-            console.error('无效的邀请信息', e);
+            const onlineUsersResponse = await getUserList({
+              pageNo: 1,
+              pageSize: 50 // 获取前50个在线用户
+            });
+            
+            if (onlineUsersResponse.success && onlineUsersResponse.result && onlineUsersResponse.result.records) {
+              // 过滤掉当前用户
+              const onlineUsers = onlineUsersResponse.result.records.filter(user => 
+                user.id !== this.currentUserId
+              );
+              
+              // 为在线用户获取积分信息
+              for (const user of onlineUsers) {
+                try {
+                  const scoreResponse = await getPlayerScoreList({
+                    userId: user.id,
+                    pageNo: 1,
+                    pageSize: 1
+                  });
+                  
+                  if (scoreResponse.success && scoreResponse.result && scoreResponse.result.records.length > 0) {
+                    availableOpponents.push({
+                      userId: user.id,
+                      userAccount: user.username || user.realname || `玩家${user.id}`,
+                      score: scoreResponse.result.records[0].score || 600,
+                      isOnline: true
+                    });
+                  } else {
+                    // 如果没有积分记录，使用默认积分
+                    availableOpponents.push({
+                      userId: user.id,
+                      userAccount: user.username || user.realname || `玩家${user.id}`,
+                      score: 600,
+                      isOnline: true
+                    });
+                  }
+                } catch (scoreError) {
+                  console.warn('获取用户积分失败:', scoreError);
+                  // 使用默认积分
+                  availableOpponents.push({
+                    userId: user.id,
+                    userAccount: user.username || user.realname || `玩家${user.id}`,
+                    score: 600,
+                    isOnline: true
+                  });
+                }
+              }
+            }
+          } catch (onlineError) {
+            console.warn('获取在线用户失败，回退到积分列表匹配:', onlineError);
+          }
+          
+          // 如果在线用户列表为空，回退到从积分列表中选择对手
+          if (availableOpponents.length === 0) {
+            const response = await getPlayerScoreList({
+              pageNo: 1,
+              pageSize: 100 // 获取前100名玩家
+            });
+            
+            if (response.success && response.result && response.result.records.length > 0) {
+              // 过滤掉当前用户，获取可匹配的对手列表
+              availableOpponents = response.result.records.filter(player => 
+                player.userId !== this.currentUserId
+              ).map(player => ({
+                ...player,
+                isOnline: false
+              }));
             }
           }
-        
-        // 增加一个测试按钮点击事件
-        uni.$on('test_invitation', (data) => {
-          this.showInvitation(data.inviter);
-        });
+          
+          if (availableOpponents.length === 0) {
+            throw new Error('暂无可匹配的对手');
+          }
+          
+          // 从可用对手中随机选择一个
+          const randomIndex = Math.floor(Math.random() * availableOpponents.length);
+          const selectedOpponent = availableOpponents[randomIndex];
+          
+          // 设置匹配状态和对手信息
+          this.matching = false;
+          this.opponentName = selectedOpponent.userAccount || `玩家${selectedOpponent.userId}`;
+          this.opponentRating = selectedOpponent.score || 600;
+          
+          // 随机分配执棋方
+          this.playAs = Math.random() < 0.5 ? 'white' : 'black';
+          
+          // 开始游戏
+          this.gameStarted = true;
+          
+          // 切换到对战标签
+          this.activeTab = 'match';
+          
+          // 按规则白方先行，开始白方计时
+          this.startWhiteTimer();
+          
+          const onlineStatus = selectedOpponent.isOnline ? '(在线)' : '(离线)';
+          uni.showToast({
+            title: `天梯赛开始${onlineStatus}，您执${this.playAs === 'white' ? '白' : '黑'}子`,
+            icon: 'none'
+          });
+          
+        } catch (error) {
+          console.error('匹配对手失败:', error);
+          throw error;
+        }
       },
       
-      // 生成测试邀请URL (仅用于开发测试)
-      generateTestInvitationUrl() {
-        const testInviter = {
-          id: Math.floor(Math.random() * 1000) + 1,
-          name: 'LucTestAccount',
-          rating: 236,
-          avatar: '/static/images/match/avatar-default.png',
-          timeControl: '10 min',
-          inviteId: 'test-invite-' + Math.random().toString(36).substring(2, 10),
-          playAs: Math.random() < 0.5 ? 'white' : 'black'
-        };
-        
-        // 将邀请信息转为URL参数
-        const invitationParam = encodeURIComponent(JSON.stringify(testInviter));
-        const url = `/pages/play/match/index?invitation=${invitationParam}`;
-        
-        // 复制到剪贴板
-        uni.setClipboardData({
-          data: url,
-          success: () => {
-            uni.showToast({
-              title: '测试URL已复制到剪贴板，可在新窗口打开',
-              icon: 'none',
-              duration: 2000
-            });
-          }
-        });
-        
-        // 同时存储到本地缓存，用于模拟接收邀请
-        uni.setStorageSync('pending_invitation', JSON.stringify(testInviter));
-        
-        return url;
-      },
       // 处理邀请弹窗关闭
       handleInvitationClose() {
-        console.log('邀请弹窗关闭');
+        // 邀请弹窗关闭
         this.invitationShown = false;
       },
       
@@ -2098,7 +2157,7 @@
       handleCancelInvite() {
         if (!this.pendingInviteId) return;
         
-        console.log('取消邀请，ID:', this.pendingInviteId);
+        // 取消邀请
         
         // 确保ID是有效的数字字符串
         if (typeof this.pendingInviteId !== 'string' || !this.pendingInviteId.match(/^[0-9]+$/)) {
@@ -2178,7 +2237,7 @@
       
       // 处理匹配弹窗关闭
       handleMatchingPopupClose() {
-        console.log('匹配弹窗关闭');
+        // 匹配弹窗关闭
       },
       
       // 获取当前用户信息
@@ -2546,7 +2605,7 @@
               capturedPiecePos: enPassantMove.capturedPiecePos // 添加被吃掉的棋子位置信息
             });
             
-            // 详细调试信息
+            // 吃过路兵详情
             console.log('吃过路兵详情 - 当前位置:', {row, col}, 
               '目标位置:', {row: enPassantMove.row, col: enPassantMove.col}, 
               '被吃棋子位置:', enPassantMove.capturedPiecePos);
@@ -2641,7 +2700,7 @@
           }
         }
         
-        // 打印当前存储的所有键值对，帮助调试
+        // 存储信息
         //console.log('当前存储的所有键值:');
         try {
           const storageInfo = uni.getStorageInfoSync();
@@ -3711,7 +3770,7 @@
                 // 修改：使用ChessBoard组件期望的字符串格式，而不是对象
                 newBoard[row][col] = `${color}-${type}`;
                 
-                // 打印调试信息
+                // 棋子信息
                 console.log(`放置棋子: ${newBoard[row][col]} 在位置 [${row}][${col}]`);
               } else {
                 console.error(`棋子位置超出棋盘范围: ${positionX}${piece.positionY} -> 行${row}列${col}`);
@@ -3946,10 +4005,63 @@
         };
         
         // 调用积分更新API
-        return this.updatePlayerScore(scoreChange);
+        return this.updatePlayerScoreInGame(scoreChange, resultType);
       },
       
-      // 新增: 更新玩家积分
+      // 游戏结算时更新玩家积分
+      async updatePlayerScoreInGame(scoreChange, gameResult) {
+        if (!this.currentUserId) {
+          console.error('无法更新积分: 缺少用户ID');
+          return;
+        }
+        
+        try {
+          // 1. 更新玩家总积分
+          const scoreUpdateData = {
+            userId: this.currentUserId,
+            userAccount: this.currentUserAccount,
+            score: this.playerRating + scoreChange
+          };
+          
+          const updateRes = await updatePlayerScore(scoreUpdateData);
+          
+          if (updateRes.success) {
+            console.log('积分更新成功:', updateRes);
+            
+            // 2. 添加积分变化记录
+            const scoreRecordData = {
+              chessPlayerId: this.currentUserId,
+              chessGameId: this.currentGameId || 'ladder_' + Date.now(), // 如果没有游戏ID，生成一个临时ID
+              score: scoreChange,
+              gameResult: gameResult, // 记录游戏结果
+              opponentName: this.opponentName,
+              opponentRating: this.opponentRating
+            };
+            
+            const recordRes = await addPlayerScoreRecord(scoreRecordData);
+            
+            if (recordRes.success) {
+              console.log('积分记录添加成功:', recordRes);
+              
+              // 更新本地积分显示
+              this.playerRating += scoreChange;
+              
+            } else {
+              console.error('积分记录添加失败:', recordRes.message);
+            }
+            
+          } else {
+            console.error('积分更新失败:', updateRes.message);
+            throw new Error(updateRes.message);
+          }
+          
+        } catch (error) {
+          console.error('积分结算过程中发生错误:', error);
+          throw error;
+        }
+      },
+      
+      // 新增: 更新玩家积分（保留原有方法用于其他场景）
       updatePlayerScore(scoreChange) {
         if (!this.currentUserId || !this.currentGameId) {
           console.error('无法更新积分: 缺少用户ID或游戏ID');
@@ -4109,39 +4221,7 @@
     z-index: 999;
   }
   
-  // 测试按钮样式
-  .debug-tools {
-    margin-top: 20rpx;
-    padding: 20rpx;
-    display: flex;
-    justify-content: center;
-    
-    .start-match-btn, .test-invitation-btn, .gen-url-btn, .set-test-id-btn {
-      background-color: #81B64C;
-      color: #fff;
-      font-size: 28rpx;
-      padding: 20rpx 40rpx;
-      border-radius: 10rpx;
-      box-shadow: 0 4rpx 8rpx rgba(0, 0, 0, 0.2);
-      margin: 0 10rpx;
-      
-      &:active {
-        opacity: 0.8;
-      }
-    }
-    
-    .test-invitation-btn {
-      background-color: #2196F3;
-    }
-    
-    .gen-url-btn {
-      background-color: #FF9800;
-    }
-    
-    .set-test-id-btn {
-      background-color: #2196F3;
-    }
-  }
+
   
   // 添加胜负弹窗样式
   .result-popup {

@@ -76,14 +76,42 @@ export function getGameReplayRecords(gameId) {
 }
 
 /**
- * 获取历史对局列表
- * @param {Object} params 查询参数 {pageNo, pageSize, ...}
- * @returns {Promise}
+ * 获取历史对局列表（包含积分信息）
+ * @param {Object} params 查询参数 {pageNo, pageSize, gameState, gameType, blackPlayAccount, whitePlayAccount}
+ * @returns {Promise} 返回对局列表，每个对局包含blackPlayerScore和whitePlayerScore字段
  */
 export function getHistoryGamesList(params) {
   return request({
     url: '/game/chessGame/list',
     method: 'get',
-    params
+    params: {
+      pageNo: params.pageNo || 1,
+      pageSize: params.pageSize || 10,
+      gameState: params.gameState, // 游戏状态筛选
+      gameType: params.gameType,   // 游戏类型筛选
+      blackPlayAccount: params.blackPlayAccount, // 黑方账号筛选
+      whitePlayAccount: params.whitePlayAccount, // 白方账号筛选
+      ...params
+    }
+  })
+}
+
+/**
+ * 获取我的对局历史
+ * @param {Object} params 查询参数 {pageNo, pageSize, userId}
+ * @returns {Promise}
+ */
+export function getMyGameHistory(params) {
+  return request({
+    url: '/chess/chessGame/list',
+    method: 'get',
+    params: {
+      pageNo: params.pageNo || 1,
+      pageSize: params.pageSize || 10,
+      // 可以通过blackPlayId或whitePlayId筛选当前用户的对局
+      blackPlayId: params.userId,
+      whitePlayId: params.userId,
+      ...params
+    }
   })
 }

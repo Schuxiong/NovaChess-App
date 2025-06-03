@@ -13,6 +13,7 @@
         :last-move="lastMove"
         :current-player="currentPlayer"
         :play-as="'white'"
+        :interactive="true"
         @cell-click="handleCellClick"
       />
       

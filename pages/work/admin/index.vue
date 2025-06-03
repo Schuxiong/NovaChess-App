@@ -60,23 +60,7 @@
             <text class="iconfont icon-right"></text>
           </view>
         </view>
-        
-        <view class="module-item" @click="goToTacticsManagement">
-          <view class="module-icon tactics-icon">
-            <text class="iconfont icon-strategy">S</text>
-          </view>
-          <view class="module-content">
-            <view class="module-title">
-              <text>战术管理</text>
-            </view>
-            <view class="module-desc">
-              <text>管理战术练习和挑战</text>
-            </view>
-          </view>
-          <view class="module-action">
-            <text class="iconfont icon-right"></text>
-          </view>
-        </view>
+
 
         <view class="module-item" @click="goToUserManagement">
           <view class="module-icon user-icon">
@@ -139,9 +123,10 @@ export default {
     }
   },
   methods: {
-    // 检查管理员权限
+    // 检查管理员权限（已取消权限校验，允许所有人访问）
     checkAdminPermission() {
-      return checkRole(['admin'])
+      return true
+      // 原代码：return checkRole(['admin'])
     },
     
     // 返回上一页
@@ -155,13 +140,7 @@ export default {
         url: '/pages/work/admin/course/index'
       })
     },
-    
-    // 前往战术管理
-    goToTacticsManagement() {
-      uni.navigateTo({
-        url: '/pages/work/admin/tactics/index'
-      })
-    },
+
     
     // 前往用户管理
     goToUserManagement() {
@@ -393,4 +372,4 @@ export default {
     color: rgba(255, 255, 255, 0.5);
   }
 }
-</style> 
+</style>

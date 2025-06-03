@@ -255,18 +255,21 @@ export default {
       if (!records || !Array.isArray(records)) return [];
       
       return records.map(record => {
-        // 根据新的数据结构处理
+        // 根据新的数据结构处理，包含积分信息
         const processedGame = {
           id: record.id || '',
           player1Name: record.whitePlayAccount || '白方玩家',
           player2Name: record.blackPlayAccount || '黑方玩家',
-          player1Rating: '?', // 当前数据结构中没有rating信息
-          player2Rating: '?', // 当前数据结构中没有rating信息
+          player1Rating: record.whitePlayerScore || '?', // 白方积分
+          player2Rating: record.blackPlayerScore || '?', // 黑方积分
           gameState: record.gameState || 0, // 1:进行中 2:白胜 3:黑胜 4:和棋等
           gameType: record.gameType || 1,
           currentTurn: record.currentTurn || 1, // 1:白方 2:黑方
           createTime: record.createTime || '',
           updateTime: record.updateTime || '',
+          // 添加积分变化信息（如果后端提供）
+          whiteScoreChange: record.whiteScoreChange || 0,
+          blackScoreChange: record.blackScoreChange || 0
         };
         
         // 计算游戏时长
