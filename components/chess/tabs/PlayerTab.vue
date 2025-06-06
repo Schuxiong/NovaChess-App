@@ -110,6 +110,7 @@
 import { listChessFriendPair } from '@/api/pair'
 import { getUserData, getUserList } from '@/api/system/user'
 import { getFriendChooseList, searchFriends } from '@/api/friend'
+import { getPlayerScoreList } from '@/api/score'
 
 export default {
   name: 'PlayerTab',
@@ -233,10 +234,26 @@ export default {
               try {
                 // 获取好友详细信息
                 const friendInfo = await getUserData(friend.friendId || friend.userId);
+                
+                // 获取好友积分信息
+                let friendScore = 1200; // 默认积分
+                try {
+                  const scoreResponse = await getPlayerScoreList({
+                    userId: friend.friendId || friend.userId,
+                    pageNo: 1,
+                    pageSize: 1
+                  });
+                  if (scoreResponse.success && scoreResponse.result && scoreResponse.result.records.length > 0) {
+                    friendScore = scoreResponse.result.records[0].score || 1200;
+                  }
+                } catch (scoreError) {
+                  console.warn('获取好友积分失败:', scoreError);
+                }
+                
                 return {
                   id: friend.friendId || friend.userId,
                   name: friendInfo.result?.realname || friendInfo.result?.username || '未知用户',
-                  rating: '1200', // 默认积分，可以后续从积分接口获取
+                  rating: friendScore,
                   avatar: friendInfo.result?.avatar || '/static/images/match/avatar-default.png',
                   flag: '/static/images/match/flag-cn.png', // 默认国旗
                   status: '在线', // 默认状态
@@ -250,7 +267,7 @@ export default {
                 return {
                   id: friend.friendId || friend.userId,
                   name: '未知用户',
-                  rating: '1200',
+                  rating: 1200,
                   avatar: '/static/images/match/avatar-default.png',
                   flag: '/static/images/match/flag-cn.png',
                   status: '离线',
@@ -286,19 +303,39 @@ export default {
         });
         
         if (response && response.result && response.result.records) {
-          this.allPlayersList = response.result.records.map(user => ({
-            id: user.id,
-            name: user.realname || user.username || '未知用户',
-            rating: '1200', // 默认积分，可以后续从积分接口获取
-            avatar: user.avatar || '/static/images/match/avatar-default.png',
-            flag: '/static/images/match/flag-cn.png', // 默认国旗
-            status: '在线', // 默认状态，可以后续从在线状态接口获取
-            isVip: false, // 默认非VIP，可以后续从VIP接口获取
-            title: '', // 默认无称号
-            signature: '这个地方是个性签名...',
-            onlineStatus: 'Online Now',
-            registerDate: user.createTime || 'Unknown'
-          }));
+          // 获取所有玩家的积分信息
+          const playersWithScores = await Promise.all(
+            response.result.records.map(async (user) => {
+              let userScore = 1200; // 默认积分
+              try {
+                const scoreResponse = await getPlayerScoreList({
+                  userId: user.id,
+                  pageNo: 1,
+                  pageSize: 1
+                });
+                if (scoreResponse.success && scoreResponse.result && scoreResponse.result.records.length > 0) {
+                  userScore = scoreResponse.result.records[0].score || 1200;
+                }
+              } catch (scoreError) {
+                console.warn('获取用户积分失败:', scoreError);
+              }
+              
+              return {
+                id: user.id,
+                name: user.realname || user.username || '未知用户',
+                rating: userScore,
+                avatar: user.avatar || '/static/images/match/avatar-default.png',
+                flag: '/static/images/match/flag-cn.png', // 默认国旗
+                status: '在线', // 默认状态，可以后续从在线状态接口获取
+                isVip: false, // 默认非VIP，可以后续从VIP接口获取
+                title: '', // 默认无称号
+                signature: '这个地方是个性签名...',
+                onlineStatus: 'Online Now',
+                registerDate: user.createTime || 'Unknown'
+              };
+            })
+          );
+          this.allPlayersList = playersWithScores;
         }
       } catch (error) {
         console.error('加载所有玩家列表失败:', error);
@@ -338,19 +375,39 @@ export default {
           });
           
           if (response && response.result && response.result.records) {
-            this.allPlayersList = response.result.records.map(user => ({
-              id: user.id,
-              name: user.realname || user.username || '未知用户',
-              rating: '1200',
-              avatar: user.avatar || '/static/images/match/avatar-default.png',
-              flag: '/static/images/match/flag-cn.png',
-              status: '在线',
-              isVip: false,
-              title: '',
-              signature: '这个地方是个性签名...',
-              onlineStatus: 'Online Now',
-              registerDate: user.createTime || 'Unknown'
-            }));
+            // 获取搜索结果的积分信息
+            const searchResultsWithScores = await Promise.all(
+              response.result.records.map(async (user) => {
+                let userScore = 1200; // 默认积分
+                try {
+                  const scoreResponse = await getPlayerScoreList({
+                    userId: user.id,
+                    pageNo: 1,
+                    pageSize: 1
+                  });
+                  if (scoreResponse.success && scoreResponse.result && scoreResponse.result.records.length > 0) {
+                    userScore = scoreResponse.result.records[0].score || 1200;
+                  }
+                } catch (scoreError) {
+                  console.warn('获取用户积分失败:', scoreError);
+                }
+                
+                return {
+                  id: user.id,
+                  name: user.realname || user.username || '未知用户',
+                  rating: userScore,
+                  avatar: user.avatar || '/static/images/match/avatar-default.png',
+                  flag: '/static/images/match/flag-cn.png',
+                  status: '在线',
+                  isVip: false,
+                  title: '',
+                  signature: '这个地方是个性签名...',
+                  onlineStatus: 'Online Now',
+                  registerDate: user.createTime || 'Unknown'
+                };
+              })
+            );
+            this.allPlayersList = searchResultsWithScores;
           }
         }
       } catch (error) {

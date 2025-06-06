@@ -112,3 +112,64 @@ export function getMyGameHistory(params) {
     }
   })
 }
+
+/**
+ * 发起和棋请求
+ * @param {String} gameId 游戏ID
+ * @returns {Promise} 返回请求Promise
+ */
+export function requestDraw(gameId) {
+  return request({
+    url: `/game/chessGame/draw/request/${gameId}`,
+    method: 'post'
+  })
+}
+
+/**
+ * 响应和棋请求
+ * @param {String} gameId 游戏ID
+ * @param {Boolean} accept 是否接受和棋
+ * @returns {Promise} 返回请求Promise
+ */
+export function respondDraw(gameId, accept) {
+  return request({
+    url: `/game/chessGame/draw/respond/${gameId}?accept=${accept}`,
+    method: 'post'
+  })
+}
+
+/**
+ * 获取和棋请求状态
+ * @param {String} gameId 游戏ID
+ * @returns {Promise} 返回请求Promise
+ */
+export function getDrawStatus(gameId) {
+  return request({
+    url: `/game/chessGame/draw/status/${gameId}`,
+    method: 'get'
+  })
+}
+
+/**
+ * 取消和棋请求
+ * @param {String} gameId 游戏ID
+ * @returns {Promise} 返回请求Promise
+ */
+export function cancelDrawRequest(gameId) {
+  return request({
+    url: `/game/chessGame/draw/cancel/${gameId}`,
+    method: 'post'
+  })
+}
+
+/**
+ * 投降
+ * @param {String} gameId 游戏ID
+ * @returns {Promise} 返回请求Promise
+ */
+export function quitGame(gameId) {
+  return request({
+    url: `/game/chessGame/quit/${gameId}`,
+    method: 'post'
+  })
+}

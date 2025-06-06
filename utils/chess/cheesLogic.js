@@ -703,6 +703,73 @@ export function calculateAlgebraicNotation(from, to, piece, board, captured) {
   return notation;
 }
 
+// 获取王车易位的可能移动
+export function getCastlingMoves(board, row, col, color) {
+  const moves = [];
+  
+  // 只有王才能进行王车易位
+  const piece = board[row][col];
+  if (!piece || getPieceType(piece) !== 'king') {
+    return moves;
+  }
+  
+  // 检查王是否已经移动过
+  const kingMoved = color === 'white' ? chessBoardState.canCastle.white.kingMoved : chessBoardState.canCastle.black.kingMoved;
+  
+  if (!kingMoved) {
+    const backRow = color === 'white' ? 7 : 0;
+    
+    // 确保王在正确的初始位置
+    if (row === backRow && col === 4) {
+      // 王车易位（短易位）
+      const kingSideClear = !board[backRow][5] && !board[backRow][6];
+      const kingSideRookMoved = color === 'white' ?
+        chessBoardState.canCastle.white.rightRookMoved :
+        chessBoardState.canCastle.black.rightRookMoved;
+      
+      if (kingSideClear && !kingSideRookMoved && board[backRow][7] && getPieceType(board[backRow][7]) === 'rook') {
+        // 检查路径是否安全（不能穿过被攻击的格子）
+        const underAttack = isPositionUnderAttack(board, backRow, 5, color) ||
+          isPositionUnderAttack(board, backRow, 6, color);
+        
+        if (!underAttack) {
+          moves.push({
+            row: backRow,
+            col: 6,
+            isCastling: true,
+            rookFrom: { row: backRow, col: 7 },
+            rookTo: { row: backRow, col: 5 }
+          });
+        }
+      }
+      
+      // 王车易位（长易位）
+      const queenSideClear = !board[backRow][1] && !board[backRow][2] && !board[backRow][3];
+      const queenSideRookMoved = color === 'white' ?
+        chessBoardState.canCastle.white.leftRookMoved :
+        chessBoardState.canCastle.black.leftRookMoved;
+      
+      if (queenSideClear && !queenSideRookMoved && board[backRow][0] && getPieceType(board[backRow][0]) === 'rook') {
+        // 检查路径是否安全
+        const underAttack = isPositionUnderAttack(board, backRow, 2, color) ||
+          isPositionUnderAttack(board, backRow, 3, color);
+        
+        if (!underAttack) {
+          moves.push({
+            row: backRow,
+            col: 2,
+            isCastling: true,
+            rookFrom: { row: backRow, col: 0 },
+            rookTo: { row: backRow, col: 3 }
+          });
+        }
+      }
+    }
+  }
+  
+  return moves;
+}
+
 // 获取初始棋盘状态
 export function getInitialChessboard() {
   // 重置棋盘状态信息

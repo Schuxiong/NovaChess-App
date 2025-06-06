@@ -1,7 +1,7 @@
 <!-- components/chess/PlayerInfo.vue -->
 <template>
   <view class="player-info" :class="{ 'opponent': isOpponent, 'current': !isOpponent, 'is-turn': isTurn, 'waiting': isWaiting }">
-    <image class="avatar" :src="avatar" mode="aspectFill"></image>
+    <image class="avatar" :src="currentAvatar" mode="aspectFill" @error="handleImageError"></image>
     <view class="player-details">
       <text class="player-name" :class="{ 'waiting-text': isWaiting }">{{ playerName }}</text>
       <image v-if="flag && !isWaiting" class="flag" :src="flag" mode="aspectFit"></image>
@@ -42,6 +42,23 @@ export default {
     // 判断是否处于等待对手状态
     isWaiting() {
       return this.playerName === '等待对手加入';
+    }
+  },
+  data() {
+    return {
+      currentAvatar: this.avatar || '/static/images/match/avatar-default.png'
+    }
+  },
+  watch: {
+    avatar(newVal) {
+      this.currentAvatar = newVal || '/static/images/match/avatar-default.png';
+    }
+  },
+  methods: {
+    handleImageError() {
+      // 头像加载失败时使用默认头像
+      console.log('头像加载失败，使用默认头像');
+      this.currentAvatar = '/static/images/match/avatar-default.png';
     }
   }
 }

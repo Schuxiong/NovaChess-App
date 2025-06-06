@@ -66,6 +66,7 @@
 <script>
 import { getFriendList, searchFriends } from '@/api/friend'
 import { getUserData } from '@/api/system/user'
+import { getPlayerScoreList } from '@/api/score'
 
 export default {
   name: 'FriendsTab',
@@ -101,13 +102,33 @@ export default {
         });
         
         if (response && response.result && response.result.records) {
-          this.searchResults = response.result.records.map(user => ({
-            id: user.id,
-            userName: user.username || user.realname,
-            rating: user.rating || 1200,
-            avatar: user.avatar || '/static/images/match/avatar-default.png',
-            badge: user.isVip ? '/static/images/match/badge-red.png' : ''
-          }));
+          // 获取用户积分信息
+          const usersWithScores = await Promise.all(
+            response.result.records.map(async (user) => {
+              let userScore = 1200; // 默认积分
+              try {
+                const scoreResponse = await getPlayerScoreList({
+                  userId: user.id,
+                  pageNo: 1,
+                  pageSize: 1
+                });
+                if (scoreResponse.success && scoreResponse.result && scoreResponse.result.records.length > 0) {
+                  userScore = scoreResponse.result.records[0].score || 1200;
+                }
+              } catch (scoreError) {
+                console.warn('获取用户积分失败:', scoreError);
+              }
+              
+              return {
+                id: user.id,
+                userName: user.username || user.realname,
+                rating: userScore,
+                avatar: user.avatar || '/static/images/match/avatar-default.png',
+                badge: user.isVip ? '/static/images/match/badge-red.png' : ''
+              };
+            })
+          );
+          this.searchResults = usersWithScores;
         }
       } catch (error) {
         console.error('搜索用户失败:', error);
@@ -183,13 +204,33 @@ export default {
         // 根据实际API响应结构处理数据
         // API返回格式: {success: true, result: [{id: "xxx", userName: "xxx"}, ...]}
         if (response && response.result && Array.isArray(response.result)) {
-          this.friendsList = response.result.map(user => ({
-            id: user.id,
-            userName: user.userName || user.username || user.realname,
-            rating: user.score || user.rating || 1200,
-            avatar: user.avatar || '/static/images/match/avatar-default.png',
-            badge: user.isVip ? '/static/images/match/badge-red.png' : ''
-          }));
+          // 获取好友积分信息
+          const friendsWithScores = await Promise.all(
+            response.result.map(async (user) => {
+              let userScore = 1200; // 默认积分
+              try {
+                const scoreResponse = await getPlayerScoreList({
+                  userId: user.id,
+                  pageNo: 1,
+                  pageSize: 1
+                });
+                if (scoreResponse.success && scoreResponse.result && scoreResponse.result.records.length > 0) {
+                  userScore = scoreResponse.result.records[0].score || 1200;
+                }
+              } catch (scoreError) {
+                console.warn('获取好友积分失败:', scoreError);
+              }
+              
+              return {
+                id: user.id,
+                userName: user.userName || user.username || user.realname,
+                rating: userScore,
+                avatar: user.avatar || '/static/images/match/avatar-default.png',
+                badge: user.isVip ? '/static/images/match/badge-red.png' : ''
+              };
+            })
+          );
+          this.friendsList = friendsWithScores;
           
           console.log('处理后的好友列表:', this.friendsList);
           

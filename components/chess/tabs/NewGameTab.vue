@@ -33,18 +33,16 @@
         </view>
         
         <!-- 时间选择模块 -->
-        <view class="time-selector" @click="showTimeSelector">
+        <view class="time-selector">
           <image class="clock-icon" src="https://pic1.imgdb.cn/item/67f3c5ffe381c3632bee9011.png" mode="aspectFit"></image>
-          <text class="time-text">{{ timeControl }}</text>
-          <text class="dropdown-icon">＜</text>
+          <text class="time-text">10 min</text>
         </view>
         
         <!-- 游戏模式选择 -->
-        <view class="game-mode-section" @click="showModeSelector">
+        <view class="game-mode-section">
           <view class="mode-card">
-            <image class="mode-icon" :src="'/static/images/match/pieces/' + (gameMode === 'standard' ? 'black-pawn' : 'black-knight') + '.png'" mode="aspectFit"></image>
-            <text class="mode-text">{{ gameMode === 'standard' ? '标准模式' : '快速模式' }}</text>
-            <text class="mode-arrow">＜</text>
+            <image class="mode-icon" src="/static/images/match/pieces/black-pawn.png" mode="aspectFit"></image>
+            <text class="mode-text">标准模式</text>
           </view>
         </view>
         
@@ -81,7 +79,7 @@
         <image v-if="selectedFriend.id > 0" class="friend-avatar" :src="selectedFriend.avatar" mode="aspectFit"></image>
         <image v-else class="piece-icon" src="/static/images/match/pieces/white-pawn.png" mode="aspectFit"></image>
         
-        <view class="matching-time">{{ timeControl }}</view>
+        <view class="matching-time">10 min</view>
         <view class="matching-status">等待加入...</view>
         <view class="cancel-button" @click="onCancelMatching">取消</view>
       </view>
@@ -120,11 +118,10 @@
       <!-- 判断是否展开更多选项 -->
       <view v-if="showMoreOptions">
         <!-- 游戏模式选择 -->
-        <view class="game-mode-section" @click="showModeSelector">
+        <view class="game-mode-section">
           <view class="mode-card">
-            <image class="mode-icon" :src="'/static/images/match/pieces/' + (gameMode === 'standard' ? 'black-pawn' : 'black-knight') + '.png'" mode="aspectFit"></image>
-            <text class="mode-text">{{ gameMode === 'standard' ? '标准模式' : '快速模式' }}</text>
-            <text class="mode-arrow">＜</text>
+            <image class="mode-icon" src="/static/images/match/pieces/black-pawn.png" mode="aspectFit"></image>
+            <text class="mode-text">标准模式</text>
           </view>
         </view>
         
@@ -172,10 +169,9 @@
       </view>
       
       <!-- 时间选择模块 -->
-      <view class="time-selector" @click="showTimeSelector">
+      <view class="time-selector">
         <image class="clock-icon" src="https://pic1.imgdb.cn/item/67f3c5ffe381c3632bee9011.png" mode="aspectFit"></image>
-        <text class="time-text">{{ timeControl }}</text>
-        <text class="dropdown-icon">＜</text>
+        <text class="time-text">10 min</text>
       </view>
       
       <!-- I play as 选择 -->
@@ -596,7 +592,8 @@ export default {
     },
     
     showModeSelector() {
-      this.$refs.modePopup.open();
+      // 已禁用模式选择功能
+      // this.$refs.modePopup.open();
     },
     
     closeModePopup() {
@@ -604,12 +601,14 @@ export default {
     },
     
     onSelectMode(mode) {
-      this.$emit('select-game-mode', mode);
+      // 固定为标准模式，不允许修改
+      this.$emit('select-game-mode', 'standard');
       this.closeModePopup();
     },
     
     showTimeSelector() {
-      this.$refs.timePopup.open('center');
+      // 已禁用时间选择功能
+      // this.$refs.timePopup.open('center');
     },
     
     closeTimePopup() {
@@ -617,7 +616,8 @@ export default {
     },
     
     onSelectTime(time) {
-      this.$emit('select-time', time);
+      // 固定为10min，不允许修改
+      this.$emit('select-time', '10 min');
       this.closeTimePopup();
     },
     

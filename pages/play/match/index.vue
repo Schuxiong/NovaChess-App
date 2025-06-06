@@ -10,7 +10,7 @@
         <player-info 
           :is-opponent="true"
           :player-name="opponentName"
-          avatar="/static/images/match/avatar-default.png"
+          :avatar="opponentAvatar"
           :time="formatTime(opponentTimeRemaining)"
           :is-turn="(playAs === 'white' && currentPlayer === 'black') || (playAs === 'black' && currentPlayer === 'white')"
         />
@@ -40,7 +40,7 @@
         <player-info 
           :is-opponent="false"
           :player-name="playerName"
-          avatar="/static/images/match/avatar-user.png"
+          :avatar="playerAvatar"
           flag="https://pic1.imgdb.cn/item/67f3c5ffe381c3632bee9012.png"
           :time="formatTime(playerTimeRemaining)"
           :is-turn="(playAs === 'white' && currentPlayer === 'white') || (playAs === 'black' && currentPlayer === 'black')"
@@ -218,9 +218,7 @@
             <text class="loading-text">AI正在分析对局...</text>
           </view>
           
-          <scroll-view v-else class="summary-text" scroll-y="true">
-            <text class="summary-content-text">{{ summaryContent }}</text>
-          </scroll-view>
+          <summary-display v-else :summary-content="summaryContent" />
         </view>
         
         <view class="summary-actions">
@@ -269,6 +267,7 @@ import MatchTab from '@/components/chess/tabs/MatchTab.vue';
 import InvitationPopup from '@/components/chess/InvitationPopup.vue';
 import TopSpacing from '@/components/TopSpacing.vue'
 import MatchingStatusPopup from '@/components/chess/MatchingStatusPopup.vue';
+import SummaryDisplay from '@/components/chess/SummaryDisplay.vue';
 
 // 导入国际象棋逻辑
 import { 
@@ -287,7 +286,7 @@ import {
 // 导入对弈关系API
 import { queryPendingInvitations, respondInvitation, addChessFriendPair, listChessFriendPair, cancelInvitation, clearPendingInvitations, getInvitationStatus, getGameIdByInviteId } from '@/api/pair';
 // 导入游戏相关API
-import { initGame, moveChess, getChessMovesHistory, updateGameStatus, enterGame } from '@/api/game';
+import { initGame, moveChess, getChessMovesHistory, updateGameStatus, enterGame, requestDraw, respondDraw, getDrawStatus, cancelDrawRequest, quitGame } from '@/api/game';
 // 导入用户API
 import { getUserData, getUserList } from '@/api/system/user';
 // 导入积分相关API
@@ -308,7 +307,8 @@ export default {
     MatchTab,
     InvitationPopup,
     TopSpacing,
-    MatchingStatusPopup
+    MatchingStatusPopup,
+    SummaryDisplay
   },
   data() {
     return {
@@ -336,6 +336,8 @@ export default {
       moveStartTime: null, // 记录当前回合开始时间
       playerName: '', // 玩家名称
       opponentName: '', // 初始显示空
+      playerAvatar: '/static/images/match/avatar-user.png', // 玩家头像
+      opponentAvatar: '/static/images/match/avatar-default.png', // 对手头像
       gameResult: '', // 游戏结果
       gameEnded: false, // 游戏是否结束
       gamesList: [],
@@ -403,6 +405,7 @@ export default {
         gameIdForSubscription: null 
       },
       enPassantTarget: null, // 新增：记录可被吃过路兵的目标格
+      movedPieces: new Set(), // 记录已移动的棋子
       
       // 对局总结相关
       summaryLoading: false,
@@ -554,6 +557,7 @@ export default {
       // 如果有选中的对手，直接显示对手信息
       if (opponent) {
         this.opponentName = opponent.userName || '等待对手加入';
+        this.opponentAvatar = opponent.avatar || '/static/images/match/avatar-default.png';
         
         // 这里可以使用选中的对手ID进行实际匹配
         console.log('选中的对手信息:', opponent);
@@ -1160,6 +1164,9 @@ export default {
       this.isCheckmated = true;
       this.checkmateColor = loserColor;
       
+      // 设置游戏结束状态
+      this.gameEnded = true;
+      
       // 使用玩家视角显示将杀特效
       if (this.$refs.chessBoard) {
         this.$refs.chessBoard.showCheckmate(true, this.checkmateColor);
@@ -1232,6 +1239,7 @@ export default {
       
       // 更新对手信息
       this.opponentName = user.name || user.userName || user.username;
+      this.opponentAvatar = user.avatar || '/static/images/match/avatar-default.png';
       this.selectedOpponent = user;
       
       // 存储邀请的其他信息，如执棋颜色等
@@ -1399,6 +1407,7 @@ export default {
               // 更新对手信息
               if (invite.acceptUserInfo) {
                 this.opponentName = invite.acceptUserInfo.realname || invite.acceptUserInfo.username || '对手';
+                this.opponentAvatar = invite.acceptUserInfo.avatar || '/static/images/match/avatar-default.png';
               }
               
               // 新增：根据邀请ID获取游戏ID
@@ -1565,6 +1574,7 @@ export default {
         if (res.success) {
           // 更新对手信息
           this.opponentName = inviter.name || inviter.sourceUserAccount || '对手';
+          this.opponentAvatar = inviter.avatar || '/static/images/match/avatar-default.png';
           if (inviter.timeControl) {
             this.timeControl = inviter.timeControl;
           }
@@ -1908,20 +1918,22 @@ export default {
       // 停止计时器
       this.stopAllTimers();
       
-      // 设置游戏结束状态和结果
+      // 设置游戏结束状态和结果（如果还没有设置的话）
       this.gameEnded = true;
-      switch(result) {
-        case 'victory':
-          this.gameResult = `${this.playerName} 获胜`;
-          break;
-        case 'defeat':
-          this.gameResult = `${this.opponentName} 获胜`;
-          break;
-        case 'draw':
-          this.gameResult = '和棋';
-          break;
-        default:
-          this.gameResult = '游戏结束';
+      if (!this.gameResult) {
+        switch(result) {
+          case 'victory':
+            this.gameResult = `${this.playerName} 获胜`;
+            break;
+          case 'defeat':
+            this.gameResult = `${this.opponentName} 获胜`;
+            break;
+          case 'draw':
+            this.gameResult = '和棋';
+            break;
+          default:
+            this.gameResult = '游戏结束';
+        }
       }
       
       // 如果是天梯赛模式，先显示积分结算
@@ -1947,11 +1959,24 @@ export default {
     
     // 处理投降消息
     handleGameQuitMessage(message) {
-      const { playerId, playerName, gameId } = message;
+      const { playerId, playerName, gameId, gameState } = message;
       
-      // 判断是否是对手投降
+      // 更新游戏状态
+      if (gameState) {
+        this.gameState = gameState;
+      }
+      
+      // 判断是否是自己投降
       const currentUser = uni.getStorageSync('userInfo');
-      if (currentUser && playerId !== currentUser.id) {
+      if (currentUser && playerId === currentUser.id) {
+        // 自己投降
+        this.handleGameEnd('defeat');
+        
+        uni.showToast({
+          title: '您已投降',
+          icon: 'none'
+        });
+      } else {
         // 对手投降，我方获胜
         this.handleGameEnd('victory');
         
@@ -1959,36 +1984,53 @@ export default {
           title: `${playerName || '对手'}投降，您获胜！`,
           icon: 'success'
         });
-      } else {
-        // 自己投降
-        this.handleGameEnd('defeat');
       }
     },
     
     // 处理和棋请求消息
     handleDrawRequestMessage(message) {
-      const { playerId, playerName } = message;
+      console.log('处理和棋请求消息:', message);
+      const { requestUserId, targetUserId, requestUser } = message;
       
-      // 显示和棋请求弹窗
-      uni.showModal({
-        title: '和棋请求',
-        content: `${playerName || '对手'}请求和棋，是否同意？`,
-        confirmText: '同意',
-        cancelText: '拒绝',
-        success: (res) => {
-          if (res.confirm) {
-            // 同意和棋
-            this.acceptDrawRequest(playerId);
-          } else {
-            // 拒绝和棋
-            this.rejectDrawRequest(playerId);
+      // 获取当前用户信息
+      const currentUser = uni.getStorageSync('userInfo');
+      if (!currentUser) {
+        console.error('无法获取当前用户信息');
+        return;
+      }
+      
+      console.log('当前用户ID:', currentUser.id, '目标用户ID:', targetUserId, '请求用户ID:', requestUserId);
+      
+      // 只有目标用户才显示和棋请求弹窗
+      if (currentUser.id === targetUserId) {
+        console.log('显示和棋请求弹窗');
+        uni.showModal({
+          title: '和棋请求',
+          content: `${requestUser || '对手'}请求和棋，是否同意？`,
+          confirmText: '同意',
+          cancelText: '拒绝',
+          success: (res) => {
+            if (res.confirm) {
+              // 同意和棋
+              this.acceptDrawRequest(requestUserId);
+            } else {
+              // 拒绝和棋
+              this.rejectDrawRequest(requestUserId);
+            }
           }
-        }
-      });
+        });
+      } else {
+        console.log('当前用户不是目标用户，不显示弹窗');
+      }
     },
     
     // 处理和棋被接受消息
     handleDrawAcceptedMessage(message) {
+      // 更新游戏状态
+      if (message.gameState) {
+        this.gameState = message.gameState;
+      }
+      
       // 游戏结束，平局
       this.handleGameEnd('draw');
       
@@ -2025,30 +2067,50 @@ export default {
     },
     
     // 同意和棋请求
-     acceptDrawRequest(requestPlayerId) {
-       if (this.webSocketService.stompClient && this.webSocketService.stompClient.connected) {
-         const message = {
-           gameId: this.currentGameId,
-           requestPlayerId: requestPlayerId,
-           action: 'accept'
-         };
+     async acceptDrawRequest(requestPlayerId) {
+       try {
+         // 通过HTTP接口响应和棋请求
+         const response = await respondDraw(this.currentGameId, true);
          
-         this.webSocketService.stompClient.send('/app/game/draw/response', {}, JSON.stringify(message));
-         console.log('同意和棋请求已发送:', message);
+         if (response && response.success) {
+           console.log('同意和棋请求已发送:', response);
+           uni.showToast({
+             title: '已同意和棋',
+             icon: 'success'
+           });
+         } else {
+           throw new Error(response?.message || '同意和棋请求失败');
+         }
+       } catch (error) {
+         console.error('同意和棋请求失败:', error);
+         uni.showToast({
+           title: error.message || '同意和棋请求失败',
+           icon: 'error'
+         });
        }
      },
      
      // 拒绝和棋请求
-     rejectDrawRequest(requestPlayerId) {
-       if (this.webSocketService.stompClient && this.webSocketService.stompClient.connected) {
-         const message = {
-           gameId: this.currentGameId,
-           requestPlayerId: requestPlayerId,
-           action: 'reject'
-         };
+     async rejectDrawRequest(requestPlayerId) {
+       try {
+         // 通过HTTP接口响应和棋请求
+         const response = await respondDraw(this.currentGameId, false);
          
-         this.webSocketService.stompClient.send('/app/game/draw/response', {}, JSON.stringify(message));
-         console.log('拒绝和棋请求已发送:', message);
+         if (response && response.success) {
+           console.log('拒绝和棋请求已发送:', response);
+           uni.showToast({
+             title: '已拒绝和棋',
+             icon: 'success'
+           });
+         } else {
+           throw new Error(response?.message || '拒绝和棋请求失败');
+         }
+       } catch (error) {
+         console.error('拒绝和棋请求失败:', error);
+         uni.showToast({
+           title: error.message || '拒绝和棋请求失败',
+           icon: 'error'
+         });
        }
      },
     
@@ -2119,34 +2181,22 @@ export default {
         success: async (res) => {
           if (res.confirm) {
             try {
-              if (this.webSocketService.stompClient && this.webSocketService.stompClient.connected) {
-                const currentUser = uni.getStorageSync('userInfo');
-                const message = {
-                  gameId: this.currentGameId,
-                  playerId: currentUser?.id,
-                  playerName: currentUser?.username || currentUser?.nickname
-                };
-                
-                // 通过WebSocket发送和棋请求
-                const success = sendMessage('/app/game/draw/request', message);
-                
-                if (success) {
-                  console.log('和棋请求已通过WebSocket发送:', message);
-                } else {
-                  throw new Error('和棋请求发送失败');
-                }
-                
+              // 通过HTTP接口发送和棋请求
+              const response = await requestDraw(this.currentGameId);
+              
+              if (response && response.success) {
+                console.log('和棋请求已发送:', response);
                 uni.showToast({
                   title: '和棋请求已发送',
                   icon: 'success'
                 });
               } else {
-                throw new Error('WebSocket连接已断开');
+                throw new Error(response?.message || '和棋请求发送失败');
               }
             } catch (error) {
               console.error('发送和棋请求失败:', error);
               uni.showToast({
-                title: '发送和棋请求失败',
+                title: error.message || '发送和棋请求失败',
                 icon: 'error'
               });
             }
@@ -2171,22 +2221,11 @@ export default {
         success: async (res) => {
           if (res.confirm) {
             try {
-              if (this.webSocketService.stompClient && this.webSocketService.stompClient.connected) {
-                 const currentUser = uni.getStorageSync('userInfo');
-                 const message = {
-                   gameId: this.currentGameId,
-                   playerId: currentUser?.id,
-                   playerName: currentUser?.username || currentUser?.nickname
-                 };
-                 
-                 // 通过WebSocket发送投降消息
-                 const success = sendMessage('/app/game/quit', message);
-                 
-                 if (success) {
-                   console.log('投降消息已通过WebSocket发送:', message);
-                 } else {
-                   throw new Error('投降消息发送失败');
-                 }
+              // 通过HTTP接口发送投降请求
+              const response = await quitGame(this.currentGameId);
+              
+              if (response && response.success) {
+                console.log('投降请求已发送:', response);
                 
                 this.stopAllTimers();
                 this.gameResult = `${this.opponentName} 胜出（投降）`;
@@ -2199,12 +2238,12 @@ export default {
                   icon: 'success'
                 });
               } else {
-                throw new Error('WebSocket连接已断开');
+                throw new Error(response?.message || '投降失败');
               }
             } catch (error) {
               console.error('投降失败:', error);
               uni.showToast({
-                title: '投降失败',
+                title: error.message || '投降失败',
                 icon: 'error'
               });
             }
@@ -2387,6 +2426,7 @@ export default {
         // 设置匹配状态和对手信息
         this.matching = false;
         this.opponentName = selectedOpponent.userAccount || `玩家${selectedOpponent.userId}`;
+        this.opponentAvatar = selectedOpponent.avatar || '/static/images/match/avatar-default.png';
         this.opponentRating = selectedOpponent.score || 600;
         
         // 随机分配执棋方
@@ -2514,17 +2554,26 @@ export default {
           this.currentUserId = userData.id;
           this.currentUserAccount = userData.username || userData.account || userData.userAccount;
           this.playerName = userData.realname || userData.username || '我';
+          // 设置玩家头像
+          this.playerAvatar = userData.avatar || '/static/images/match/avatar-user.png';
           
-          // 将用户ID存储到本地
+          // 将完整的用户信息存储到本地
           uni.setStorageSync('userId', userData.id);
-          //console.log('获取到用户数据:', userData);
+          uni.setStorageSync('userInfo', userData);
+          console.log('获取到用户数据并存储到本地:', userData);
         }
       }).catch(err => {
-        //console.error('获取用户信息失败', err);
+        console.error('获取用户信息失败', err);
         // 使用缓存中的用户ID
         const userId = uni.getStorageSync('userId');
+        const userInfo = uni.getStorageSync('userInfo');
         if (userId) {
           this.currentUserId = userId;
+        }
+        if (userInfo) {
+          console.log('使用缓存的用户信息:', userInfo);
+          // 从缓存中获取头像
+          this.playerAvatar = userInfo.avatar || '/static/images/match/avatar-user.png';
         }
       });
     },
@@ -2674,7 +2723,7 @@ export default {
         }
       } else if (piece.endsWith('king') || piece.endsWith('rook')) {
           // 如果王或车进行了普通移动，也标记为已移动
-          const movedPieceId = this.getChessPieceUniqueId(to.row, to.col, this.chessboard[to.row][to.col]); // 使用移动后的位置和棋子
+          const movedPieceId = this.getChessPieceUniqueId(from.row, from.col, piece); // 使用移动前的位置和棋子
           this.movedPieces.add(movedPieceId);
       }
 
@@ -2687,7 +2736,7 @@ export default {
     },
     // 组装完整消息体并发送
     sendMoveToServerFull(from, to, promoteTo = null) {
-      // 发送时用from位置的piece（因为to位置已变）
+      // 发送时用移动后的piece信息，但使用移动前的位置来生成ID
       const piece = this.chessboard[to.row][to.col];
       const pieceColor = getPieceColor(piece);
       const chessPiecesId = this.getChessPieceUniqueId(from.row, from.col, piece);
@@ -3185,6 +3234,7 @@ export default {
             gameId: gameIdStr,
             userId: String(this.currentUserId),
             username: this.playerName || `玩家_${this.currentUserId}`,
+            avatar: this.playerAvatar || '/static/images/match/avatar-user.png',
             playerColor: this.playAs // 确保 playAs 已经基于游戏分配设置
           };
           const destination = `/app/game/join/${gameIdStr}`; // PLAYER_JOIN 消息的目的地
@@ -3237,8 +3287,9 @@ export default {
           // 更新对手信息等UI
           if (message.payload.userId !== this.currentUserId) {
               console.log('WebSocket: 对手加入游戏，更新对手信息', message.payload);
-              // 更新对手名称
-              this.opponentName = message.payload.username || this.opponentName; 
+              // 更新对手名称和头像
+              this.opponentName = message.payload.username || this.opponentName;
+              this.opponentAvatar = message.payload.avatar || '/static/images/match/avatar-default.png'; 
               
               // 明确清除等待状态
               this.gameStarted = true;
@@ -3396,6 +3447,9 @@ export default {
               // 停止所有计时器
               this.stopAllTimers();
               
+              // 设置游戏结束状态
+              this.gameEnded = true;
+              
               // 根据胜方决定结果类型
               let resultType = 'draw'; // 默认为和棋
               if (winner === 'WHITE' && this.playAs === 'white' || 
@@ -3407,6 +3461,21 @@ export default {
                   this.gameResult = `${this.opponentName} 胜出 (${this.getReasonText(reason)})`;
               } else {
                   this.gameResult = '和棋';
+              }
+              
+              // 显示棋盘结算样式
+              if (this.$refs.chessBoard) {
+                // 根据原因显示不同的棋盘效果
+                if (reason === 'CHECKMATE') {
+                  // 将杀：显示将杀动画，失败方为输家
+                  const loserColor = winner === 'WHITE' ? 'black' : 'white';
+                  this.isCheckmated = true;
+                  this.checkmateColor = loserColor;
+                  this.$refs.chessBoard.showCheckmate(true, loserColor);
+                } else {
+                  // 其他原因（投降、超时等）：显示一般的游戏结束效果
+                  this.$refs.chessBoard.showCheckmate(false, winner === 'WHITE' ? 'black' : 'white');
+                }
               }
               
               // 进行积分结算
@@ -4761,23 +4830,6 @@ export default {
         opacity: 0.8;
       }
     }
-    
-    .summary-text {
-       height: 100%;
-       overflow-y: auto;
-       padding: 10rpx;
-       
-       .summary-content-text {
-         color: #fff;
-         font-size: 28rpx;
-         line-height: 1.6;
-         white-space: pre-wrap;
-         word-wrap: break-word;
-         word-break: break-all;
-         overflow-wrap: break-word;
-         max-width: 100%;
-       }
-     }
   }
   
   .summary-actions {

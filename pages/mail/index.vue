@@ -52,7 +52,7 @@
         <view class="chat-message" v-for="(item, index) in chatMessagesSorted" :key="index"
           :class="{'my-message': item.esSenderName === userInfo.username, 'other-message': item.esSenderName !== userInfo.username}">
           <view v-if="item.esSenderName !== userInfo.username" class="message-row left">
-            <image class="avatar" :src="item.esSenderAvatar || item.esReceiverAvatar || item.avatar || '/static/images/mail/default-avatar.png'" mode="aspectFill"></image>
+            <image class="avatar" :src="item.esSenderAvatar || '/static/images/mail/default-avatar.png'" mode="aspectFill"></image>
             <view class="message-info">
               <view class="message-sender-time">
                 <text class="sender">{{item.esSenderName}}</text>
@@ -73,7 +73,7 @@
                 <text class="message-text">{{item.esContent}}</text>
               </view>
             </view>
-            <image class="avatar" :src="item.esSenderAvatar || (item && item.avatar) || '/static/images/mail/avatar1.png'" mode="aspectFill"></image>
+            <image class="avatar" :src="userInfo.avatar || item.esSenderAvatar || '/static/images/mail/default-avatar.png'" mode="aspectFill"></image>
           </view>
         </view>
         <view id="chat-bottom"></view>
@@ -152,14 +152,74 @@ export default {
       chatSessions: [],
       userInfo: null, // 存储用户信息
       // 新增排序后的聊天消息
-      chatMessagesSorted: []
+      chatMessagesSorted: [],
+      // 轮询相关
+      pollingTimer: null,
+      pollingInterval: 3000, // 3秒轮询一次
+      isPolling: false
     }
   },
   created() {
     this.getUserInfo()
   },
-  methods: {
-    // 获取用户信息
+  mounted() {
+    // 页面显示时开始轮询
+    this.startPolling()
+  },
+  beforeDestroy() {
+    // 页面销毁时停止轮询
+    this.stopPolling()
+  },
+  onShow() {
+    // 页面显示时开始轮询
+    this.startPolling()
+  },
+  onHide() {
+    // 页面隐藏时停止轮询
+    this.stopPolling()
+  },
+    methods: {
+      // 开始轮询
+      startPolling() {
+        if (this.isPolling || !this.userInfo) {
+          return
+        }
+        this.isPolling = true
+        this.pollingTimer = setInterval(() => {
+          this.refreshData()
+        }, this.pollingInterval)
+        console.log('开始轮询新消息')
+      },
+      
+      // 停止轮询
+      stopPolling() {
+        if (this.pollingTimer) {
+          clearInterval(this.pollingTimer)
+          this.pollingTimer = null
+        }
+        this.isPolling = false
+        console.log('停止轮询新消息')
+      },
+      
+      // 刷新数据
+      async refreshData() {
+        try {
+          if (this.currentPage === 'inbox') {
+            // 在收件箱页面时刷新会话列表
+            await this.loadChatSessions()
+          } else if (this.currentPage === 'chat' && this.currentChat) {
+            // 在聊天页面时刷新聊天记录
+            const chatUserId = this.chatSessions.find(item => item.username === this.currentChat)?.userId
+            if (chatUserId) {
+              await this.loadChatMessages(chatUserId)
+            }
+          }
+        } catch (error) {
+          console.error('轮询刷新数据失败:', error)
+        }
+      },
+      
+      // 获取用户信息
     async getUserInfo() {
       try {
         const res = await getUserData()
@@ -176,6 +236,8 @@ export default {
           this.userInfo = res.result
           // 获取用户信息后再加载聊天会话
           this.loadChatSessions()
+          // 启动轮询
+          this.startPolling()
         } else {
           console.error('获取用户信息失败:', res)
           uni.showToast({
@@ -197,6 +259,9 @@ export default {
       this.currentPage = 'new';
       this.recipient = '';
       this.newMessageText = '';
+      // 切换到新消息页面后重新启动轮询
+      this.stopPolling();
+      this.startPolling();
     },
     
     // 打开聊天详情
@@ -207,6 +272,9 @@ export default {
       // 查找当前会话的用户ID
       const chatUserId = item && item.userId ? item.userId : null;
       await this.loadChatMessages(chatUserId);
+      // 切换到聊天页面后重新启动轮询
+      this.stopPolling();
+      this.startPolling();
     },
     
     // 加载聊天会话列表
@@ -233,13 +301,17 @@ export default {
             groupedMessages[otherUser] = {...item, userId: otherUserId};
           }
         });
-        this.chatSessions = Object.values(groupedMessages).map(item => ({
-          username: item.esSenderName === this.userInfo.username ? item.esReceiverName : item.esSenderName,
-          userId: item.esSenderName === this.userInfo.username ? item.esReceiverId : item.esSenderId,
-          lastMessage: item.esContent || '',
-          lastMessageTime: item.esSendTime || new Date().toISOString(),
-          avatar: item.esSenderAvatar || item.esReceiverAvatar || item.avatar || '/static/images/mail/default-avatar.png'
-        }));
+        this.chatSessions = Object.values(groupedMessages).map(item => {
+          const isCurrentUserSender = item.esSenderName === this.userInfo.username
+          return {
+            username: isCurrentUserSender ? item.esReceiverName : item.esSenderName,
+            userId: isCurrentUserSender ? item.esReceiverId : item.esSenderId,
+            lastMessage: item.esContent || '',
+            lastMessageTime: item.esSendTime || new Date().toISOString(),
+            // 显示对方的头像：如果当前用户是发送者，显示接收者头像；否则显示发送者头像
+            avatar: isCurrentUserSender ? item.esReceiverAvatar : item.esSenderAvatar || '/static/images/mail/default-avatar.png'
+          }
+        });
       } catch (error) {
         console.error('加载聊天会话列表失败', error);
         uni.showToast({
@@ -328,6 +400,9 @@ export default {
     // 返回收件箱
     backToInbox() {
       this.currentPage = 'inbox';
+      // 返回收件箱后重新启动轮询
+      this.stopPolling();
+      this.startPolling();
     },
     
     // 发送消息
@@ -357,6 +432,9 @@ export default {
         await this.loadChatMessages(this.chatSessions.find(item => item.username === this.currentChat)?.userId);
         await this.loadChatSessions();
         this.messageText = '';
+        // 重新启动轮询以确保及时获取新消息
+        this.stopPolling();
+        this.startPolling();
         this.$nextTick(() => {
           const el = document.getElementById('chat-bottom');
           if (el) el.scrollIntoView({ behavior: 'smooth' });
@@ -400,6 +478,9 @@ export default {
         // 新消息发送后刷新会话列表
         await this.loadChatSessions();
         this.newMessageText = '';
+        // 重新启动轮询以确保及时获取新消息
+        this.stopPolling();
+        this.startPolling();
         this.backToInbox();
       } catch (error) {
         console.error('消息发送失败:', error);

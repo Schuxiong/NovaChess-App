@@ -393,8 +393,8 @@ export default {
               icon: 'none',
               duration: 2000
             });
-            // 使用模拟数据兜底
-            this.useMockData();
+            // 不使用模拟数据，显示错误信息
+            console.error('无法获取对局数据');
           }
         })
         .catch(err => {
@@ -404,8 +404,8 @@ export default {
             icon: 'none',
             duration: 2000
           });
-          // 使用模拟数据兜底
-          this.useMockData();
+          // 不使用模拟数据，显示错误信息
+          console.error('网络错误，无法获取对局数据');
         })
         .finally(() => {
           uni.hideLoading();
@@ -576,26 +576,7 @@ export default {
       return pieceMap[piecesType] || { name: '未知', icon: '' };
     },
     
-    // 使用模拟数据（当API请求失败时使用）
-    useMockData() {
-      console.log('使用模拟数据');
-      this.game = {
-        player1Name: 'NikoTheodo',
-        player2Name: 'theloyalwolf',
-        player1Rating: 3072,
-        player2Rating: 2952,
-        player1Avatar: 'https://pic1.imgdb.cn/item/67f3c5c7e381c3632bee8ff9.png',
-        player2Avatar: 'https://pic1.imgdb.cn/item/67f3c5c7e381c3632bee8ff9.png',
-        player1Time: '10:00',
-        player2Time: '10:00',
-        moves: [
-          { notation: 'e4', from: 'e2', to: 'e4', time: 1.2, evaluation: 0.3 },
-          { notation: 'c5', from: 'c7', to: 'c5', time: 0.8, evaluation: 0.1 },
-          { notation: 'Nf3', from: 'g1', to: 'f3', time: 1.5, evaluation: 0.4 }
-        ]
-      };
-      this.initializeReplay();
-    },
+    // 移除模拟数据方法，使用真实API数据
     toggleEvaluation(e) {
       this.showEvaluation = e.detail.value
     },
@@ -1124,8 +1105,8 @@ export default {
               icon: 'none',
               duration: 2000
             });
-            // 使用模拟数据兜底
-            this.useMockLiveData();
+            // 不使用模拟数据，显示错误信息
+            console.error('无法获取直播对局数据');
           }
         })
         .catch(err => {
@@ -1135,8 +1116,8 @@ export default {
             icon: 'none',
             duration: 2000
           });
-          // 使用模拟数据兜底
-          this.useMockLiveData();
+          // 不使用模拟数据，显示错误信息
+          console.error('网络错误，无法获取直播对局数据');
         })
         .finally(() => {
           uni.hideLoading();
@@ -1184,34 +1165,7 @@ export default {
         });
     },
     
-    // 使用模拟的直播数据
-    useMockLiveData() {
-      console.log('使用模拟直播数据');
-      this.game = {
-        player1Name: 'NikoTheodo',
-        player2Name: 'theloyalwolf',
-        player1Rating: 3072,
-        player2Rating: 2952,
-        player1Avatar: 'https://pic1.imgdb.cn/item/67f3c5c7e381c3632bee8ff9.png',
-        player2Avatar: 'https://pic1.imgdb.cn/item/67f3c5c7e381c3632bee8ff9.png',
-        player1Time: '3:45',
-        player2Time: '4:12',
-        moves: [
-          { notation: 'e4', from: 'e2', to: 'e4', time: 1.2, evaluation: 0.3 },
-          { notation: 'c5', from: 'c7', to: 'c5', time: 0.8, evaluation: 0.1 }
-        ]
-      };
-      this.initializeReplay();
-      
-      // 模拟直播更新
-      if (this.isLiveMode) {
-        setTimeout(() => {
-          console.log('模拟新的棋步');
-          this.game.moves.push({ notation: 'Nf3', from: 'g1', to: 'f3', time: 1.5, evaluation: 0.4 });
-          this.jumpToMove(this.game.moves.length - 1);
-        }, 5000);
-      }
-    },
+    // 移除模拟直播数据方法，使用真实API数据
   },
   
   mounted() {

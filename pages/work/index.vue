@@ -195,6 +195,7 @@ export default {
     align-items: center;
     background-color: rgba(40, 25, 12, 0.6);
     border-radius: 20rpx;
+    font-weight: bold;
     padding: 30rpx;
     margin-bottom: 30rpx;
     
@@ -212,6 +213,7 @@ export default {
       
       .iconfont {
         color: #ffffff;
+        font-weight: bold;
         font-size: 60rpx;
       }
     }
@@ -219,10 +221,12 @@ export default {
     .module-content {
       margin-left: 30rpx;
       display: flex;
+      font-weight: bold;
       flex-direction: column;
       
       .module-title {
         color: #ffffff;
+        font-weight: bold;
         font-size: 48rpx;
       }
     }

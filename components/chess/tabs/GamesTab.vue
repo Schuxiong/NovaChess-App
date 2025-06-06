@@ -57,34 +57,52 @@
     
     <!-- 观看比赛列表 -->
     <view v-if="activeSubTab === 'watch'" class="games-list">
-      <view v-if="isLoadingLive" class="loading-container">
-        <text class="loading-text">加载中...</text>
-      </view>
-      <view v-else-if="liveGames.length === 0" class="empty-container">
-        <text class="empty-text">暂无直播对局</text>
-      </view>
-      <view 
-        v-else
-        v-for="(game, index) in liveGames" 
-        :key="index" 
-        class="game-item"
-        @click="watchLive(game.id)"
-      >
-        <view class="time-icon">
-          <image class="clock-icon" src="https://pic1.imgdb.cn/item/67f3c5ffe381c3632bee9011.png" mode="aspectFit"></image>
+      <!-- 手动输入比赛ID区域 -->
+      <view class="manual-watch-section">
+        <text class="section-title">观看指定比赛</text>
+        <view class="input-row">
+          <input 
+            class="game-id-input" 
+            v-model="watchGameId"
+            placeholder="请输入比赛ID" 
+            placeholder-style="color: rgba(255,255,255,0.5);"
+          />
+          <button class="watch-btn" @click="watchSpecificGame">观看</button>
         </view>
-        <view class="game-info">
-          <view class="player-row">
-            <text class="player-name">{{game.player1Name || game.player1}} ({{game.player1Rating || game.rating1}})</text>
-            <image class="flag" :src="game.flag1" mode="aspectFit"></image>
-          </view>
-          <view class="player-row">
-            <text class="player-name">{{game.player2Name || game.player2}} ({{game.player2Rating || game.rating2}})</text>
-            <image class="flag" :src="game.flag2" mode="aspectFit"></image>
-          </view>
+      </view>
+      
+      <!-- 直播对局列表 -->
+      <view class="live-games-section">
+        <text class="section-title">正在进行的比赛</text>
+        <view v-if="isLoadingLive" class="loading-container">
+          <text class="loading-text">加载中...</text>
         </view>
-        <view class="game-duration">
-          <text class="duration-text">{{game.duration || '进行中'}}</text>
+        <view v-else-if="liveGames.length === 0" class="empty-container">
+          <text class="empty-text">暂无直播对局</text>
+        </view>
+        <view 
+          v-else
+          v-for="(game, index) in liveGames" 
+          :key="index" 
+          class="game-item"
+          @click="watchLive(game.id)"
+        >
+          <view class="time-icon">
+            <image class="clock-icon" src="https://pic1.imgdb.cn/item/67f3c5ffe381c3632bee9011.png" mode="aspectFit"></image>
+          </view>
+          <view class="game-info">
+            <view class="player-row">
+              <text class="player-name">{{game.player1Name || game.player1}} ({{game.player1Rating || game.rating1}})</text>
+              <image class="flag" :src="game.flag1" mode="aspectFit"></image>
+            </view>
+            <view class="player-row">
+              <text class="player-name">{{game.player2Name || game.player2}} ({{game.player2Rating || game.rating2}})</text>
+              <image class="flag" :src="game.flag2" mode="aspectFit"></image>
+            </view>
+          </view>
+          <view class="game-duration">
+            <text class="duration-text">{{game.duration || '进行中'}}</text>
+          </view>
         </view>
       </view>
     </view>
@@ -113,67 +131,8 @@ export default {
       liveGames: [],
       isLoading: false,
       isLoadingLive: false,
-      mockHistoryGames: [
-        { 
-          id: '1001', 
-          player1: 'lucasshanchuxiong', 
-          rating1: '221', 
-          player2: 'dawas39', 
-          rating2: '410', 
-          score: '0-1', 
-          duration: '10 min' 
-        },
-        { 
-          id: '1002', 
-          player1: 'Wang_JB', 
-          rating1: '1530', 
-          player2: 'GrandMaster2023', 
-          rating2: '1498', 
-          score: '1-0', 
-          duration: '15 min' 
-        },
-        { 
-          id: '1003', 
-          player1: 'ChessMaster88', 
-          rating1: '1842', 
-          player2: 'theloyalwolf', 
-          rating2: '1820', 
-          score: '½-½', 
-          duration: '5 min' 
-        }
-      ],
-      mockLiveGames: [
-        { 
-          id: '2001', 
-          player1: 'rekonwa', 
-          rating1: '2390', 
-          player2: 'EdwardWarren1926', 
-          rating2: '2388', 
-          flag1: '/static/images/match/flag-pl.png', 
-          flag2: '/static/images/match/flag-us.png', 
-          duration: '10 min' 
-        },
-        { 
-          id: '2002', 
-          player1: 'Orosz_Milos_Mark', 
-          rating1: '2383', 
-          player2: 'vibhoor', 
-          rating2: '2370', 
-          flag1: '/static/images/match/flag-hu.png', 
-          flag2: '/static/images/match/flag-in.png', 
-          duration: '10 min' 
-        },
-        { 
-          id: '2003', 
-          player1: 'NikoTheodo', 
-          rating1: '2390', 
-          player2: 'theloyalwolf', 
-          rating2: '2388', 
-          flag1: '/static/images/match/flag-pl.png', 
-          flag2: '/static/images/match/flag-us.png', 
-          duration: '10 min' 
-        }
-      ]
+      // 移除Mock数据，使用真实API数据
+      watchGameId: '' // 用于手动配置观看比赛的gameId
     }
   },
   created() {
@@ -224,14 +183,16 @@ export default {
             console.log('加载历史对局成功:', this.historyGames.length, '条记录');
           } else {
             console.warn('加载历史对局返回无效数据:', res);
-            // 使用模拟数据兜底
-            this.historyGames = this.mockHistoryGames;
+            this.historyGames = [];
           }
         })
         .catch(err => {
           console.error('加载历史对局失败:', err);
-          // 使用模拟数据兜底
-          this.historyGames = this.mockHistoryGames;
+          this.historyGames = [];
+          uni.showToast({
+            title: '加载对局历史失败',
+            icon: 'none'
+          });
         })
         .finally(() => {
           this.isLoading = false;
@@ -242,12 +203,33 @@ export default {
     loadLiveGames() {
       this.isLoadingLive = true;
       
-      // TODO: 添加加载直播对局的API调用
-      // 目前使用模拟数据
+      // TODO: 实现真实的直播对局API调用
+      // 目前暂时清空数据，等待后端API实现
       setTimeout(() => {
-        this.liveGames = this.mockLiveGames;
+        this.liveGames = [];
         this.isLoadingLive = false;
       }, 500);
+    },
+    
+    // 手动设置观看比赛的gameId
+    setWatchGameId(gameId) {
+      this.watchGameId = gameId;
+      console.log('设置观看比赛ID:', gameId);
+    },
+    
+    // 观看指定ID的比赛
+    watchSpecificGame() {
+      if (!this.watchGameId) {
+        uni.showToast({
+          title: '请先设置比赛ID',
+          icon: 'none'
+        });
+        return;
+      }
+      
+      uni.navigateTo({
+        url: `/pages/play/replay/index?id=${this.watchGameId}&live=true`
+      });
     },
     
     // 处理对局数据格式
@@ -546,6 +528,70 @@ export default {
         font-size: 22rpx;
       }
     }
+  }
+}
+
+// 手动观看比赛区域样式
+.manual-watch-section {
+  margin-bottom: 40rpx;
+  padding: 30rpx;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 20rpx;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  
+  .section-title {
+    color: #fff;
+    font-size: 28rpx;
+    font-weight: bold;
+    margin-bottom: 20rpx;
+    display: block;
+  }
+  
+  .input-row {
+    display: flex;
+    align-items: center;
+    gap: 20rpx;
+    
+    .game-id-input {
+      flex: 1;
+      height: 80rpx;
+      background-color: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 10rpx;
+      padding: 0 20rpx;
+      color: #fff;
+      font-size: 26rpx;
+      
+      &::placeholder {
+        color: rgba(255, 255, 255, 0.5);
+      }
+    }
+    
+    .watch-btn {
+      height: 80rpx;
+      padding: 0 30rpx;
+      background-color: #81b64c;
+      color: #fff;
+      border: none;
+      border-radius: 10rpx;
+      font-size: 26rpx;
+      font-weight: bold;
+      
+      &:active {
+        background-color: #6a9a3d;
+      }
+    }
+  }
+}
+
+// 直播对局区域样式
+.live-games-section {
+  .section-title {
+    color: #fff;
+    font-size: 28rpx;
+    font-weight: bold;
+    margin-bottom: 20rpx;
+    display: block;
   }
 }
 </style>
