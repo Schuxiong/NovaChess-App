@@ -105,4 +105,4 @@ NovaChess/
 
 ## 🔗 链接
 
-- GitHub仓库：[https://github.com/LucusorShan/NovaChess](https://github.com/LucusorShan/NovaChess)
+完整前后端项目代码：https://github.com/Schuxiong/NovaChess_Final
